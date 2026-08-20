@@ -1,0 +1,83 @@
+---
+title: "Week 0 — Base Environment Test"
+output: html_document
+---
+
+Validates that R can read all core data sources in the MOATY project.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(readr)
+library(readxl)
+library(dplyr)
+
+# Locate project root by walking up from getwd() until we find .git
+find_project_root <- function(path = getwd()) {
+  path <- normalizePath(path, mustWork = FALSE)
+  for (i in seq_len(10)) {
+    if (dir.exists(file.path(path, ".git"))) return(path)
+    parent <- dirname(path)
+    if (parent == path) stop("Cannot find project root (.git not found)")
+    path <- parent
+  }
+  stop("Cannot find project root (.git not found)")
+}
+DATA <- file.path(find_project_root(), "data")
+```
+
+## Financial Indicators (2014)
+
+```{r financial-indicators}
+fin <- read_csv(file.path(DATA, "financial_indicators", "2014_Financial_Data.csv"),
+                show_col_types = FALSE)
+cat("Shape:", nrow(fin), "rows x", ncol(fin), "cols\n")
+cat("First 8 columns:", paste(names(fin)[1:8], collapse = ", "), "\n")
+head(fin[, 1:6], 3)
+```
+
+## XBRL Submissions — 2017q1
+
+```{r sub}
+sub <- read_tsv(file.path(DATA, "quarter_reports", "2017q1", "sub.txt"),
+                col_types = cols(.default = "c"), show_col_types = FALSE)
+cat("Shape:", nrow(sub), "rows x", ncol(sub), "cols\n")
+glimpse(sub[, 1:8])
+```
+
+## XBRL Numeric Values — 2017q1
+
+```{r num}
+num <- read_tsv(file.path(DATA, "quarter_reports", "2017q1", "num.txt"),
+                col_types = cols(.default = "c"), show_col_types = FALSE)
+cat("Shape:", nrow(num), "rows x", ncol(num), "cols\n")
+glimpse(num)
+```
+
+## XBRL Tag Taxonomy — 2017q1
+
+```{r tag}
+tag <- read_tsv(file.path(DATA, "quarter_reports", "2017q1", "tag.txt"),
+                col_types = cols(.default = "c"), show_col_types = FALSE)
+cat("Shape:", nrow(tag), "rows x", ncol(tag), "cols\n")
+glimpse(tag[, 1:6])
+```
+
+## Damodaran WACC Model
+
+```{r wacc}
+wacc <- read_xls(file.path(DATA, "wacc.xls"), sheet = 1)
+cat("Shape:", nrow(wacc), "rows x", ncol(wacc), "cols\n")
+head(wacc[, 1:6], 3)
+```
+
+## Damodaran ROC Model
+
+```{r roc}
+roc <- read_xls(file.path(DATA, "roc.xls"), sheet = 1)
+cat("Shape:", nrow(roc), "rows x", ncol(roc), "cols\n")
+head(roc[, 1:6], 3)
+```
+
+---
+
+All data sources loaded successfully.
