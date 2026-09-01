@@ -23,3 +23,14 @@ docs/site/
 # environment.
 Manifest.toml
 /data
+
+# Moaty build artifacts
+moaty.db
+data/
+*.log
+node_modules/
+__pycache__/
+*.pyc
+.venv/
+dist/
+
