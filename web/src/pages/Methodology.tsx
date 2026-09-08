@@ -23,14 +23,30 @@ export default function Methodology() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="loading">Loading methodology...</div>
-  if (error) return (
-    <div className="card">
-      <h2>Methodology</h2>
-      <p className="error">Could not load methodology document: {error}</p>
-      <p>Please ensure METHODOLOGY.md exists in the project root.</p>
-    </div>
-  )
+  if (loading) {
+    return (
+      <div className="loading">
+        <div className="loading-spinner"></div>
+        <span>Loading methodology...</span>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="card">
+        <div className="page-header">
+          <h1>Methodology</h1>
+        </div>
+        <div className="error" style={{ padding: '2rem' }}>
+          <p>Could not load methodology document.</p>
+          <p style={{ fontSize: '0.875rem', marginTop: '0.5rem', color: 'var(--gray-500)' }}>
+            Make sure METHODOLOGY.md exists and the API is running.
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="card methodology-content">

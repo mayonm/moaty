@@ -46,13 +46,30 @@ export default function Validation() {
       .finally(() => setLoading(false))
   }, [])
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) {
+    return (
+      <div className="loading">
+        <div className="loading-spinner"></div>
+        <span>Loading validation data...</span>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="error">
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚠️</div>
+        <p>Error loading data: {error}</p>
+      </div>
+    )
+  }
+  
   if (!data) return null
 
-  // Prepare scatter plot data (lambda vs holdout RMSE)
+  // Prepare scatter plot data
   const scatterData = data.companies
     .filter(c => c.holdout_rmse_model !== null && c.lambda !== null)
+    .slice(0, 200)
     .map(c => ({
       lambda: c.lambda,
       rmse: c.holdout_rmse_model,
@@ -61,94 +78,130 @@ export default function Validation() {
 
   // Prepare comparison bar data
   const barData = [
-    { name: 'Model RMSE', value: data.mean_holdout_rmse_model || 0, fill: '#0984e3' },
-    { name: 'Naive RMSE', value: data.mean_holdout_rmse_naive || 0, fill: '#e94560' }
+    { name: 'Model', value: data.mean_holdout_rmse_model || 0 },
+    { name: 'Naive', value: data.mean_holdout_rmse_naive || 0 }
   ]
 
   const formatNumber = (n: number | null, decimals = 4) => {
-    if (n === null || n === undefined) return '-'
+    if (n === null || n === undefined) return '—'
     return n.toFixed(decimals)
   }
 
   const sigPct = data.total_companies > 0 
     ? ((data.significant_lambda / data.total_companies) * 100).toFixed(1)
-    : 0
+    : '0'
 
   const modelWinPct = data.total_companies > 0
     ? ((data.model_beats_naive / data.total_companies) * 100).toFixed(1)
-    : 0
+    : '0'
 
   return (
     <div>
+      <div className="page-header">
+        <h1>Model Validation</h1>
+        <p>Statistical validation of decay fits using holdout data (2025-2026).</p>
+      </div>
+
       <div className="stats-grid">
         <div className="stat-card">
           <div className="label">Companies Validated</div>
-          <div className="value">{data.total_companies.toLocaleString()}</div>
+          <div className="value purple">{data.total_companies.toLocaleString()}</div>
         </div>
         <div className="stat-card">
           <div className="label">Significant λ (p &lt; 0.05)</div>
-          <div className="value positive">{data.significant_lambda} ({sigPct}%)</div>
+          <div className="value positive">{data.significant_lambda}</div>
+          <div className="subtext">{sigPct}% of total</div>
         </div>
         <div className="stat-card">
           <div className="label">Model Beats Naive</div>
-          <div className="value positive">{data.model_beats_naive} ({modelWinPct}%)</div>
+          <div className="value positive">{data.model_beats_naive}</div>
+          <div className="subtext">{modelWinPct}% win rate</div>
         </div>
         <div className="stat-card">
-          <div className="label">λ-Price Correlation</div>
+          <div className="label">λ–Price Correlation</div>
           <div className="value">{formatNumber(data.lambda_price_correlation)}</div>
+          <div className="subtext">decay vs returns</div>
         </div>
       </div>
 
       <div className="two-column">
         <div className="card">
-          <h2>Model vs Naive RMSE Comparison</h2>
+          <div className="card-header">
+            <h2>RMSE Comparison</h2>
+            <span className="card-badge">Mean Holdout Error</span>
+          </div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" />
-                <YAxis />
-                <Tooltip formatter={(v: number) => v.toFixed(4)} />
-                <Bar dataKey="value">
-                  {barData.map((entry, i) => (
-                    <Cell key={i} fill={entry.fill} />
-                  ))}
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
+                <XAxis 
+                  dataKey="name" 
+                  stroke="#71717a"
+                  tick={{ fill: '#71717a', fontSize: 12 }}
+                />
+                <YAxis 
+                  stroke="#71717a"
+                  tick={{ fill: '#71717a', fontSize: 12 }}
+                />
+                <Tooltip 
+                  formatter={(v) => Number(v).toFixed(4)}
+                  contentStyle={{ 
+                    background: 'white', 
+                    border: '1px solid #e4e4e7',
+                    borderRadius: '8px'
+                  }}
+                />
+                <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                  <Cell fill="#9333ea" />
+                  <Cell fill="#d4d4d8" />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
-          <p style={{ fontSize: '0.85rem', color: '#666', marginTop: '0.5rem' }}>
-            Mean Holdout RMSE: Model = {formatNumber(data.mean_holdout_rmse_model)}, 
-            Naive = {formatNumber(data.mean_holdout_rmse_naive)}
+          <p style={{ fontSize: '0.85rem', color: 'var(--gray-500)', marginTop: '0.5rem' }}>
+            Model RMSE: {formatNumber(data.mean_holdout_rmse_model)} | 
+            Naive RMSE: {formatNumber(data.mean_holdout_rmse_naive)}
           </p>
         </div>
 
         <div className="card">
-          <h2>Decay Rate vs Holdout RMSE</h2>
+          <div className="card-header">
+            <h2>Decay Rate vs Holdout Error</h2>
+          </div>
           <div className="chart-container">
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
                 <XAxis 
                   type="number" 
                   dataKey="lambda" 
-                  name="λ (decay rate)" 
+                  name="λ" 
                   domain={[0, 'auto']}
+                  stroke="#71717a"
+                  tick={{ fill: '#71717a', fontSize: 12 }}
+                  label={{ value: 'λ (decay rate)', position: 'bottom', fill: '#71717a', fontSize: 12 }}
                 />
                 <YAxis 
                   type="number" 
                   dataKey="rmse" 
-                  name="Holdout RMSE"
+                  name="RMSE"
                   domain={[0, 'auto']}
+                  stroke="#71717a"
+                  tick={{ fill: '#71717a', fontSize: 12 }}
+                  label={{ value: 'Holdout RMSE', angle: -90, position: 'insideLeft', fill: '#71717a', fontSize: 12 }}
                 />
                 <Tooltip 
                   cursor={{ strokeDasharray: '3 3' }}
-                  formatter={(v: number, name: string) => [v.toFixed(4), name]}
-                  labelFormatter={(v) => `λ = ${Number(v).toFixed(4)}`}
+                  formatter={(v) => Number(v).toFixed(4)}
+                  contentStyle={{ 
+                    background: 'white', 
+                    border: '1px solid #e4e4e7',
+                    borderRadius: '8px'
+                  }}
                 />
                 <Scatter 
                   data={scatterData} 
-                  fill="#0984e3"
+                  fill="#9333ea"
                   fillOpacity={0.6}
                 />
               </ScatterChart>
@@ -158,7 +211,10 @@ export default function Validation() {
       </div>
 
       <div className="card">
-        <h2>Validation Details by Company</h2>
+        <div className="card-header">
+          <h2>Validation Details</h2>
+          <span className="card-badge">{Math.min(100, data.companies.length)} companies</span>
+        </div>
         <div className="table-container">
           <table>
             <thead>
@@ -167,44 +223,44 @@ export default function Validation() {
                 <th>λ</th>
                 <th>R²</th>
                 <th>P-value</th>
-                <th>CI (95%)</th>
+                <th>95% CI</th>
                 <th>RMSE (Model)</th>
                 <th>RMSE (Naive)</th>
                 <th>Winner</th>
               </tr>
             </thead>
             <tbody>
-              {data.companies.slice(0, 100).map((c, i) => (
+              {data.companies.slice(0, 100).map((c) => (
                 <tr 
                   key={c.cik}
                   className="clickable-row"
                   onClick={() => navigate(`/company/${c.ticker || c.cik}`)}
                 >
-                  <td><strong>{c.ticker || c.cik.slice(0, 8)}</strong></td>
-                  <td>{formatNumber(c.lambda)}</td>
-                  <td>{formatNumber(c.r_squared, 3)}</td>
-                  <td style={{ color: c.p_value && c.p_value < 0.05 ? '#00b894' : '#666' }}>
+                  <td className="ticker-cell">{c.ticker || c.cik.slice(0, 8)}</td>
+                  <td className="number-cell">{formatNumber(c.lambda)}</td>
+                  <td className="number-cell">{formatNumber(c.r_squared, 3)}</td>
+                  <td className="number-cell" style={{ 
+                    color: c.p_value && c.p_value < 0.05 ? 'var(--success)' : 'inherit'
+                  }}>
                     {formatNumber(c.p_value)}
                   </td>
-                  <td>[{formatNumber(c.ci_low)}, {formatNumber(c.ci_high)}]</td>
-                  <td>{formatNumber(c.holdout_rmse_model)}</td>
-                  <td>{formatNumber(c.holdout_rmse_naive)}</td>
-                  <td style={{ 
-                    color: c.holdout_rmse_model && c.holdout_rmse_naive && 
-                           c.holdout_rmse_model < c.holdout_rmse_naive ? '#00b894' : '#e94560'
-                  }}>
-                    {c.holdout_rmse_model && c.holdout_rmse_naive 
-                      ? (c.holdout_rmse_model < c.holdout_rmse_naive ? 'Model' : 'Naive')
-                      : '-'}
+                  <td className="number-cell">[{formatNumber(c.ci_low, 3)}, {formatNumber(c.ci_high, 3)}]</td>
+                  <td className="number-cell">{formatNumber(c.holdout_rmse_model)}</td>
+                  <td className="number-cell">{formatNumber(c.holdout_rmse_naive)}</td>
+                  <td>
+                    {c.holdout_rmse_model && c.holdout_rmse_naive ? (
+                      c.holdout_rmse_model < c.holdout_rmse_naive ? (
+                        <span className="winner-model">Model</span>
+                      ) : (
+                        <span className="winner-naive">Naive</span>
+                      )
+                    ) : '—'}
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <p style={{ marginTop: '1rem', color: '#666', fontSize: '0.85rem' }}>
-          Showing first 100 companies sorted by holdout RMSE. Click a row for full details.
-        </p>
       </div>
     </div>
   )

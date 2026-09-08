@@ -57,71 +57,111 @@ export default function Leaderboard() {
     }
   }
 
-  const handleSort = (field: string) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')
-    } else {
-      setSortBy(field)
-      setSortOrder('asc')
-    }
-  }
-
   const formatNumber = (n: number, decimals = 4) => {
-    if (n === null || n === undefined) return '-'
+    if (n === null || n === undefined) return '—'
     return n.toFixed(decimals)
   }
 
   const formatPercent = (n: number) => {
-    if (n === null || n === undefined) return '-'
+    if (n === null || n === undefined) return '—'
     return `${(n * 100).toFixed(1)}%`
   }
 
-  if (loading) return <div className="loading">Loading...</div>
-  if (error) return <div className="error">Error: {error}</div>
+  if (loading) {
+    return (
+      <div className="loading">
+        <div className="loading-spinner"></div>
+        <span>Loading companies...</span>
+      </div>
+    )
+  }
+  
+  if (error) {
+    return (
+      <div className="error">
+        <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>⚠️</div>
+        <p>Error loading data: {error}</p>
+        <p style={{ fontSize: '0.875rem', marginTop: '0.5rem' }}>
+          Make sure the API server is running on port 8000
+        </p>
+      </div>
+    )
+  }
+  
   if (!data) return null
+
+  const avgLambda = data.companies.length > 0 
+    ? data.companies.reduce((a, c) => a + c.lambda, 0) / data.companies.length
+    : 0
 
   return (
     <div>
+      <div className="page-header">
+        <h1>Moat Decay Leaderboard</h1>
+        <p>Companies ranked by economic moat durability. Lower λ = more durable competitive advantage.</p>
+      </div>
+
       <div className="stats-grid">
         <div className="stat-card">
           <div className="label">Total Companies</div>
-          <div className="value">{data.total.toLocaleString()}</div>
+          <div className="value purple">{data.total.toLocaleString()}</div>
+          <div className="subtext">with converged fits</div>
         </div>
         <div className="stat-card">
-          <div className="label">Avg λ (decay rate)</div>
-          <div className="value">
-            {data.companies.length > 0 
-              ? (data.companies.reduce((a, c) => a + c.lambda, 0) / data.companies.length).toFixed(3)
-              : '-'}
-          </div>
+          <div className="label">Average λ</div>
+          <div className="value">{avgLambda.toFixed(4)}</div>
+          <div className="subtext">decay rate</div>
         </div>
         <div className="stat-card">
           <div className="label">Sectors</div>
           <div className="value">{data.sectors.length}</div>
+          <div className="subtext">industry groups</div>
+        </div>
+        <div className="stat-card">
+          <div className="label">Data Period</div>
+          <div className="value">9 yrs</div>
+          <div className="subtext">2017–2026</div>
         </div>
       </div>
 
       <div className="card">
-        <h2>Moat Decay Leaderboard</h2>
+        <div className="card-header">
+          <h2>Companies</h2>
+          <span className="card-badge">
+            {data.companies.length} shown
+          </span>
+        </div>
         
         <div className="filters">
-          <select value={sector} onChange={e => setSector(e.target.value)}>
+          <select 
+            className="filter-select"
+            value={sector} 
+            onChange={e => setSector(e.target.value)}
+          >
             <option value="">All Sectors</option>
             {data.sectors.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
           </select>
           
-          <select value={sortBy} onChange={e => setSortBy(e.target.value)}>
+          <select 
+            className="filter-select"
+            value={sortBy} 
+            onChange={e => setSortBy(e.target.value)}
+          >
             <option value="lambda">Sort by: λ (decay rate)</option>
-            <option value="r_squared">Sort by: R²</option>
+            <option value="r_squared">Sort by: R² (fit quality)</option>
             <option value="roic_0">Sort by: Initial ROIC</option>
             <option value="roic_terminal">Sort by: Terminal ROIC</option>
           </select>
           
-          <select value={sortOrder} onChange={e => setSortOrder(e.target.value)}>
-            <option value="asc">Ascending</option>
-            <option value="desc">Descending</option>
+          <select 
+            className="filter-select"
+            value={sortOrder} 
+            onChange={e => setSortOrder(e.target.value)}
+          >
+            <option value="asc">Ascending ↑</option>
+            <option value="desc">Descending ↓</option>
           </select>
         </div>
 
@@ -129,40 +169,38 @@ export default function Leaderboard() {
           <table>
             <thead>
               <tr>
-                <th onClick={() => handleSort('ticker')}>Ticker</th>
+                <th>Ticker</th>
                 <th>Company</th>
-                <th onClick={() => handleSort('sector')}>Sector</th>
-                <th onClick={() => handleSort('lambda')}>λ (decay)</th>
-                <th onClick={() => handleSort('roic_0')}>ROIC₀</th>
-                <th onClick={() => handleSort('roic_terminal')}>ROIC∞</th>
-                <th onClick={() => handleSort('r_squared')}>R²</th>
-                <th onClick={() => handleSort('n_periods')}>Periods</th>
+                <th>Sector</th>
+                <th>λ (decay)</th>
+                <th>ROIC₀</th>
+                <th>ROIC∞</th>
+                <th>R²</th>
+                <th>Periods</th>
               </tr>
             </thead>
             <tbody>
-              {data.companies.map((c, i) => (
+              {data.companies.map((c) => (
                 <tr 
                   key={c.cik} 
                   className="clickable-row"
                   onClick={() => navigate(`/company/${c.ticker || c.cik}`)}
                 >
-                  <td><strong>{c.ticker || c.cik.slice(0, 8)}</strong></td>
-                  <td>{c.company_name || '-'}</td>
-                  <td>{c.sector || '-'}</td>
-                  <td>{formatNumber(c.lambda)}</td>
-                  <td>{formatPercent(c.roic_0)}</td>
-                  <td>{formatPercent(c.roic_terminal)}</td>
-                  <td>{formatNumber(c.r_squared, 3)}</td>
-                  <td>{c.n_periods}</td>
+                  <td className="ticker-cell">{c.ticker || c.cik.slice(0, 8)}</td>
+                  <td className="company-cell">{c.company_name || '—'}</td>
+                  <td>
+                    {c.sector && <span className="badge badge-sector">{c.sector}</span>}
+                  </td>
+                  <td className="number-cell">{formatNumber(c.lambda)}</td>
+                  <td className="number-cell">{formatPercent(c.roic_0)}</td>
+                  <td className="number-cell">{formatPercent(c.roic_terminal)}</td>
+                  <td className="number-cell">{formatNumber(c.r_squared, 3)}</td>
+                  <td className="number-cell">{c.n_periods}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        
-        <p style={{ marginTop: '1rem', color: '#666', fontSize: '0.85rem' }}>
-          Lower λ = more durable moat (slower decay). Higher λ = faster erosion.
-        </p>
       </div>
     </div>
   )
