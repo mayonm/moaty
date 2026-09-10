@@ -1,19 +1,21 @@
-# Moaty — Economic Moat Decay Prediction System
+# Moaty — AI-Powered Company Research Tool
 
-Moaty models how long a company's economic moat (competitive advantage) lasts by fitting an exponential decay curve to historical Return on Invested Capital (ROIC):
+Moaty is an interactive research tool that combines AI analysis with prediction market data to help you understand a company's competitive moat.
 
-```
-ROIC(t) = ROIC_terminal + (ROIC_0 − ROIC_terminal) × e^(-λt)
-```
+## Features
+
+- **AI Moat Analysis** — Get comprehensive competitive advantage analysis powered by Google Gemini
+- **Prediction Markets** — See what Kalshi traders expect for company and economic events
+- **Interactive Chat** — Ask follow-up questions to dive deeper into any analysis
+- **Historical Data** — Access ROIC decay metrics from our database of 2,000+ companies
 
 ## Quick Start
 
 ### Prerequisites
 
 - Python 3.10+
-- Julia 1.9+
-- R 4.0+
 - Node.js 18+
+- Gemini API Key (free from [Google AI Studio](https://aistudio.google.com/app/apikey))
 
 ### Installation
 
@@ -21,30 +23,11 @@ ROIC(t) = ROIC_terminal + (ROIC_0 − ROIC_terminal) × e^(-λt)
 # Python dependencies
 pip install -r requirements.txt
 
-# Julia packages (run once)
-julia -e 'using Pkg; Pkg.add(["LsqFit", "CSV", "DataFrames", "SQLite", "JSON"])'
-
-# R packages (run once)
-Rscript R/install.R
-
 # Frontend dependencies
 cd web && npm install && cd ..
 ```
 
-### Run the Full Pipeline
-
-```bash
-python run_pipeline.py
-```
-
-This downloads SEC EDGAR data, computes ROIC, fits decay models, runs validation, and generates forecasts. Takes ~10-15 minutes on first run.
-
-To skip downloads if data already exists:
-```bash
-python run_pipeline.py --skip-download --skip-prices
-```
-
-### Start the Local Website
+### Run the Application
 
 Terminal 1 (API server):
 ```bash
@@ -56,100 +39,98 @@ Terminal 2 (Frontend):
 cd web && npm run dev
 ```
 
-Open http://localhost:3000 in your browser.
+Open http://localhost:5173 in your browser.
+
+## How It Works
+
+1. **Enter a company name or ticker** (e.g., "Apple", "AAPL")
+2. **Get AI-powered analysis** covering:
+   - Moat assessment (Wide/Narrow/None)
+   - Competitive advantages
+   - Threats and risks
+   - Prediction market sentiment
+3. **Ask follow-up questions** in the chat interface
 
 ## Project Structure
 
 ```
 moaty/
-├── run_pipeline.py          # Main orchestrator (run this)
-├── moaty.db                  # SQLite database
-├── METHODOLOGY.md            # Detailed methodology documentation
-├── requirements.txt          # Python dependencies
-│
-├── src/                      # Python pipeline scripts
-│   ├── download_edgar.py     # SEC EDGAR data downloader
-│   ├── parse_fundamentals.py # ROIC computation
-│   ├── download_prices.py    # Stock price downloader
-│   ├── load_sqlite.py        # SQLite loader
-│   └── forecasts.py          # Forecast generator
-│
-├── julia/                    # Julia fitting engine
-│   ├── Project.toml
-│   └── fit_decay.jl          # Exponential decay fitting
-│
-├── R/                        # R validation scripts
-│   ├── install.R
-│   └── validate_fits.R       # Statistical validation
-│
 ├── api/                      # FastAPI backend
-│   └── main.py
+│   └── main.py               # API endpoints
+│
+├── src/                      # Python services
+│   ├── gemini_client.py      # Gemini AI integration
+│   ├── kalshi_client.py      # Kalshi prediction markets
+│   └── research_service.py   # Research orchestrator
 │
 ├── web/                      # React frontend
 │   ├── src/
 │   │   ├── pages/
-│   │   │   ├── Leaderboard.tsx
-│   │   │   ├── CompanyDetail.tsx
-│   │   │   ├── Validation.tsx
+│   │   │   ├── Research.tsx  # Main research page
 │   │   │   └── Methodology.tsx
 │   │   └── App.tsx
 │   └── package.json
 │
-└── data/                     # Data files (gitignored)
-    ├── quarter_reports/      # SEC EDGAR raw data
-    ├── fundamentals.csv
-    ├── prices.csv
-    └── decay_fits.csv
+├── moaty.db                  # SQLite database (optional, for historical data)
+├── METHODOLOGY.md            # Methodology documentation
+└── requirements.txt          # Python dependencies
 ```
-
-## Database Schema
-
-The SQLite database (`moaty.db`) contains these tables:
-
-| Table | Description |
-|-------|-------------|
-| `fundamentals` | Company-year ROIC observations |
-| `prices` | Daily stock prices |
-| `decay_fits` | Fitted decay parameters (λ, ROIC_0, ROIC_terminal) |
-| `validation` | Statistical validation metrics |
-| `forecasts` | 5yr and 10yr ROIC forecasts |
 
 ## API Endpoints
 
-| Endpoint | Description |
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/research` | POST | Analyze a company with AI |
+| `/api/chat` | POST | Follow-up questions |
+| `/api/search` | GET | Search companies in database |
+| `/api/kalshi/{query}` | GET | Get prediction markets |
+| `/api/methodology` | GET | Methodology documentation |
+
+### Research Request Example
+
+```bash
+curl -X POST http://localhost:8000/api/research \
+  -H "Content-Type: application/json" \
+  -d '{
+    "company_name": "Apple",
+    "ticker": "AAPL",
+    "api_key": "your-gemini-api-key"
+  }'
+```
+
+## Data Sources
+
+1. **Kalshi** — Real-time prediction market data (no auth required)
+2. **Google Gemini** — AI analysis (free API key required)
+3. **Moaty Database** — Historical ROIC and decay parameters (optional)
+
+## Historical Data Pipeline (Optional)
+
+The original Moaty system includes a data pipeline for computing ROIC decay metrics:
+
+```bash
+# Run full pipeline (downloads SEC data, fits decay models)
+python run_pipeline.py
+```
+
+This creates `moaty.db` with historical ROIC data and fitted decay parameters using the model:
+
+```
+ROIC(t) = ROIC_terminal + (ROIC_0 − ROIC_terminal) × e^(-λt)
+```
+
+See [METHODOLOGY.md](METHODOLOGY.md) for detailed documentation.
+
+### Pipeline Requirements
+
+- Julia 1.9+ with LsqFit.jl
+- R 4.0+ for statistical validation
+
+## Environment Variables
+
+| Variable | Description |
 |----------|-------------|
-| `GET /api/leaderboard` | Ranked list of companies by λ |
-| `GET /api/company/{ticker}` | Company detail with ROIC series |
-| `GET /api/validation` | Holdout validation metrics |
-| `GET /api/methodology` | Methodology documentation |
-| `GET /api/stats` | Database statistics |
-
-## Website Pages
-
-1. **Leaderboard** — Sortable table of companies ranked by decay rate
-2. **Company Detail** — ROIC chart, fitted curve, forecasts, validation metrics
-3. **Validation** — Model vs naive comparison, price correlation
-4. **Methodology** — Full methodology documentation
-
-## Key Configuration
-
-Edit these in the source files:
-
-| Setting | Location | Default |
-|---------|----------|---------|
-| Holdout years | `src/load_sqlite.py` | 2025, 2026 |
-| Min years for fitting | `src/parse_fundamentals.py` | 7 |
-| Disruption multiplier | `src/forecasts.py` | 1.5 |
-| Bootstrap iterations | `R/validate_fits.R` | 100 |
-
-## Methodology
-
-See [METHODOLOGY.md](METHODOLOGY.md) for detailed documentation of:
-- ROIC calculation formula
-- Decay model specification
-- Statistical validation approach
-- Forecast methodology
-- Data sources and limitations
+| `GEMINI_API_KEY` | Google Gemini API key (optional, can be provided in UI) |
 
 ## License
 

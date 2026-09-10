@@ -1,10 +1,12 @@
 """
 Moaty API Server
 
-FastAPI backend serving decay fit data from SQLite database.
+FastAPI backend for AI-powered company research.
+Combines Kalshi prediction markets, company fundamentals, and Gemini AI analysis.
 """
 
 import sqlite3
+import sys
 from pathlib import Path
 from typing import Optional, List
 from contextlib import contextmanager
@@ -15,14 +17,20 @@ from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 import markdown
 
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from src.research_service import get_research_service, ResearchResult
+from src.kalshi_client import get_kalshi_client
+
 # Configuration
 DB_PATH = Path(__file__).parent.parent / "moaty.db"
 METHODOLOGY_PATH = Path(__file__).parent.parent / "METHODOLOGY.md"
 
 app = FastAPI(
     title="Moaty API",
-    description="Economic Moat Decay Prediction System API",
-    version="1.0.0"
+    description="AI-Powered Company Research Tool - Analyze competitive moats with prediction markets and AI",
+    version="2.0.0"
 )
 
 # CORS for local development
@@ -46,7 +54,63 @@ def get_db():
         conn.close()
 
 
-# Response models
+# ===================
+# Request/Response Models
+# ===================
+
+# Research API models
+class ResearchRequest(BaseModel):
+    company_name: str
+    ticker: Optional[str] = None
+    api_key: Optional[str] = None
+    include_kalshi: bool = True
+    include_fundamentals: bool = True
+    include_economic_context: bool = True
+
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
+    api_key: Optional[str] = None
+
+
+class KalshiMarketResponse(BaseModel):
+    ticker: str
+    title: str
+    subtitle: Optional[str]
+    yes_price: float
+    no_price: float
+    volume: int
+    close_time: Optional[str]
+    url: str
+
+
+class ResearchResponse(BaseModel):
+    session_id: str
+    company_name: str
+    ticker: Optional[str]
+    analysis: str
+    kalshi_markets: List[KalshiMarketResponse]
+    has_fundamentals: bool
+    fundamentals_summary: Optional[dict]
+    data_sources: List[str]
+    errors: List[str]
+
+
+class ChatResponse(BaseModel):
+    response: str
+    session_id: str
+
+
+class SearchResult(BaseModel):
+    ticker: Optional[str]
+    company_name: Optional[str]
+    lambda_: Optional[float]
+    r_squared: Optional[float]
+    sector: Optional[str]
+
+
+# Legacy models (kept for backward compatibility)
 class CompanySummary(BaseModel):
     cik: str
     ticker: Optional[str]
@@ -98,14 +162,187 @@ async def root():
     """API root endpoint."""
     return {
         "name": "Moaty API",
-        "version": "1.0.0",
+        "version": "2.0.0",
+        "description": "AI-Powered Company Research Tool",
         "endpoints": {
-            "leaderboard": "/api/leaderboard",
-            "company": "/api/company/{ticker}",
-            "validation": "/api/validation",
-            "methodology": "/api/methodology"
+            "research": "/api/research (POST) - Analyze a company with AI",
+            "chat": "/api/chat (POST) - Follow-up questions",
+            "search": "/api/search - Search companies in database",
+            "kalshi": "/api/kalshi/{query} - Get prediction markets",
+            "leaderboard": "/api/leaderboard - Company rankings (legacy)",
+            "company": "/api/company/{ticker} - Company details (legacy)",
+            "validation": "/api/validation - Validation stats (legacy)",
+            "methodology": "/api/methodology - Methodology docs"
         }
     }
+
+
+# ===================
+# Research API Endpoints
+# ===================
+
+@app.post("/api/research", response_model=ResearchResponse)
+async def research_company(request: ResearchRequest):
+    """
+    Research a company using AI and prediction markets.
+    
+    Combines data from:
+    - Kalshi prediction markets
+    - Moaty database (ROIC history, decay parameters)
+    - Gemini AI analysis
+    
+    Returns analysis and a session_id for follow-up chat.
+    """
+    service = get_research_service()
+    
+    # Set API key if provided
+    if request.api_key:
+        service.set_api_key(request.api_key)
+    
+    if not service.is_configured() and not request.api_key:
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini API key required. Provide it in the request or set GEMINI_API_KEY environment variable."
+        )
+    
+    # Conduct research
+    result = service.research(
+        company_name=request.company_name,
+        ticker=request.ticker,
+        include_kalshi=request.include_kalshi,
+        include_fundamentals=request.include_fundamentals,
+        include_economic_context=request.include_economic_context
+    )
+    
+    # Format Kalshi markets for response
+    markets = []
+    for m in result.kalshi_markets:
+        markets.append(KalshiMarketResponse(
+            ticker=m.ticker,
+            title=m.title,
+            subtitle=m.subtitle,
+            yes_price=m.yes_price,
+            no_price=m.no_price,
+            volume=m.volume,
+            close_time=m.close_time.isoformat() if m.close_time else None,
+            url=m.url
+        ))
+    
+    # Summarize fundamentals for response
+    fundamentals_summary = None
+    if result.fundamentals:
+        decay = result.fundamentals.get("decay_params", {})
+        fundamentals_summary = {
+            "ticker": result.fundamentals.get("ticker"),
+            "company_name": result.fundamentals.get("company_name"),
+            "sector": result.fundamentals.get("sector"),
+            "decay_rate": decay.get("lambda"),
+            "initial_roic": decay.get("roic_0"),
+            "terminal_roic": decay.get("roic_terminal"),
+            "r_squared": decay.get("r_squared"),
+            "roic_periods": len(result.fundamentals.get("roic_history", []))
+        }
+    
+    return ResearchResponse(
+        session_id=result.session_id,
+        company_name=result.company_name,
+        ticker=result.ticker,
+        analysis=result.analysis,
+        kalshi_markets=markets,
+        has_fundamentals=result.fundamentals is not None,
+        fundamentals_summary=fundamentals_summary,
+        data_sources=result.data_sources_used,
+        errors=result.errors
+    )
+
+
+@app.post("/api/chat", response_model=ChatResponse)
+async def chat_followup(request: ChatRequest):
+    """
+    Continue a conversation about a researched company.
+    
+    Requires a session_id from a previous /api/research call.
+    """
+    service = get_research_service()
+    
+    # Set API key if provided
+    if request.api_key:
+        service.set_api_key(request.api_key)
+    
+    if not service.is_configured():
+        raise HTTPException(
+            status_code=400,
+            detail="Gemini API key required."
+        )
+    
+    # Get chat response
+    response = service.chat(request.session_id, request.message)
+    
+    return ChatResponse(
+        response=response,
+        session_id=request.session_id
+    )
+
+
+@app.get("/api/search")
+async def search_companies(q: str = Query(..., min_length=1, description="Search query")):
+    """
+    Search for companies in the database.
+    
+    Matches against ticker and company name.
+    """
+    service = get_research_service()
+    results = service.search_companies(q, limit=20)
+    
+    return {
+        "query": q,
+        "results": results
+    }
+
+
+@app.get("/api/kalshi/{query}")
+async def get_kalshi_markets(query: str, limit: int = Query(10, ge=1, le=50)):
+    """
+    Get Kalshi prediction markets related to a query.
+    
+    Searches for company-specific and economic markets.
+    """
+    kalshi = get_kalshi_client()
+    
+    # Search for markets
+    markets = kalshi.search_markets(query, limit=limit)
+    
+    # Also get economic context
+    econ_markets = kalshi.get_economic_markets(limit=5)
+    
+    return {
+        "query": query,
+        "company_markets": [
+            {
+                "ticker": m.ticker,
+                "title": m.title,
+                "subtitle": m.subtitle,
+                "yes_price": m.yes_price,
+                "volume": m.volume,
+                "url": m.url
+            }
+            for m in markets
+        ],
+        "economic_markets": [
+            {
+                "ticker": m.ticker,
+                "title": m.title,
+                "yes_price": m.yes_price,
+                "url": m.url
+            }
+            for m in econ_markets
+        ]
+    }
+
+
+# ===================
+# Legacy API Endpoints (kept for backward compatibility)
+# ===================
 
 
 @app.get("/api/leaderboard")
