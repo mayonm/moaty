@@ -4,7 +4,7 @@ Moaty is an interactive research tool that combines AI analysis with prediction 
 
 ## Features
 
-- **AI Moat Analysis** — Get comprehensive competitive advantage analysis powered by Google Gemini
+- **AI Moat Analysis** — Get comprehensive competitive advantage analysis powered by Groq or Gemini
 - **Prediction Markets** — See what Kalshi traders expect for company and economic events
 - **Interactive Chat** — Ask follow-up questions to dive deeper into any analysis
 - **Historical Data** — Access ROIC decay metrics from our database of 2,000+ companies
@@ -15,7 +15,9 @@ Moaty is an interactive research tool that combines AI analysis with prediction 
 
 - Python 3.10+
 - Node.js 18+
-- Gemini API Key (free from [Google AI Studio](https://aistudio.google.com/app/apikey))
+- **Free AI API Key** (choose one):
+  - **Groq** (recommended) — [Get free key](https://console.groq.com/keys) — No credit card required
+  - **Gemini** — [Get free key](https://aistudio.google.com/app/apikey)
 
 ### Installation
 
@@ -130,7 +132,10 @@ See [METHODOLOGY.md](METHODOLOGY.md) for detailed documentation.
 
 | Variable | Description |
 |----------|-------------|
-| `GEMINI_API_KEY` | Google Gemini API key (optional, can be provided in UI) |
+| `GROQ_API_KEY` | Groq API key (free, recommended) |
+| `GEMINI_API_KEY` | Google Gemini API key (alternative) |
+
+**Note:** Set one of these environment variables to enable AI-powered search. If neither is set, users can enter their API key in the UI.
 
 ## License
 

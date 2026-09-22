@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 import uuid
 
 from .kalshi_client import get_kalshi_client, KalshiMarket
-from .gemini_client import get_gemini_client, GeminiClient
+from .ai_client import get_ai_client, AIClient
 
 
 DB_PATH = Path(__file__).parent.parent / "moaty.db"
@@ -40,29 +40,34 @@ class ResearchResult:
 class ResearchService:
     """Service for conducting company research."""
     
-    def __init__(self, gemini_api_key: Optional[str] = None):
+    def __init__(self, api_key: Optional[str] = None, provider: str = "groq"):
         """
         Initialize the research service.
         
         Args:
-            gemini_api_key: Optional API key for Gemini (can be set later)
+            api_key: Optional API key (can be set later)
+            provider: AI provider ("groq" or "gemini")
         """
         self.kalshi = get_kalshi_client()
-        self.gemini = get_gemini_client()
+        self.ai = get_ai_client()
         
-        if gemini_api_key:
-            self.gemini.set_api_key(gemini_api_key)
+        if api_key:
+            self.ai.set_api_key(api_key, provider)
         
         # Store research sessions for follow-up chat
         self.sessions: Dict[str, ResearchResult] = {}
     
-    def set_api_key(self, api_key: str):
-        """Set the Gemini API key."""
-        self.gemini.set_api_key(api_key)
+    def set_api_key(self, api_key: str, provider: str = "groq"):
+        """Set the AI API key."""
+        self.ai.set_api_key(api_key, provider)
     
     def is_configured(self) -> bool:
         """Check if the service is properly configured."""
-        return self.gemini.is_configured()
+        return self.ai.is_configured()
+    
+    def get_provider(self) -> Optional[str]:
+        """Get the current AI provider name."""
+        return self.ai.get_provider()
     
     def _get_db_fundamentals(self, identifier: str) -> Optional[Dict]:
         """
@@ -217,13 +222,13 @@ class ResearchService:
         result.kalshi_markets = kalshi_markets
         
         # 4. Generate AI analysis
-        if self.gemini.is_configured():
+        if self.ai.is_configured():
             try:
                 # Format Kalshi data for prompt
                 kalshi_text = self.kalshi.format_markets_for_prompt(kalshi_markets)
                 
                 # Generate analysis
-                analysis = self.gemini.analyze_company_sync(
+                analysis = self.ai.analyze_company_sync(
                     company_name=company_name,
                     ticker=result.ticker,
                     fundamentals=result.fundamentals,
@@ -231,13 +236,14 @@ class ResearchService:
                 )
                 
                 result.analysis = analysis
-                result.data_sources_used.append("gemini_ai")
+                provider = self.ai.get_provider() or "ai"
+                result.data_sources_used.append(f"{provider}_ai")
                 
             except Exception as e:
                 result.errors.append(f"AI analysis failed: {str(e)}")
                 result.analysis = f"Error generating analysis: {str(e)}"
         else:
-            result.analysis = "Gemini API key not configured. Please provide your API key to enable AI analysis."
+            result.analysis = "No AI API key configured. Set GROQ_API_KEY (free) or GEMINI_API_KEY to enable AI analysis."
         
         # Store session for follow-up
         self.sessions[session_id] = result
@@ -255,8 +261,8 @@ class ResearchService:
         Returns:
             AI response
         """
-        if not self.gemini.is_configured():
-            return "Error: Gemini API key not configured."
+        if not self.ai.is_configured():
+            return "Error: No AI API key configured."
         
         # Get session context
         session = self.sessions.get(session_id)
@@ -274,13 +280,13 @@ class ResearchService:
                     context_parts.append(f"Decay Rate (λ): {params.get('lambda', 'N/A')}")
             context = "\n".join(context_parts)
         
-        return self.gemini.chat(session_id, message, context)
+        return self.ai.chat(session_id, message, context)
     
     def clear_session(self, session_id: str):
         """Clear a research session."""
         if session_id in self.sessions:
             del self.sessions[session_id]
-        self.gemini.clear_chat(session_id)
+        self.ai.clear_chat(session_id)
     
     def get_session(self, session_id: str) -> Optional[ResearchResult]:
         """Get a stored research session."""

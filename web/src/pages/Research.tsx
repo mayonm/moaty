@@ -302,8 +302,8 @@ export default function Research() {
           <div className="api-key-header">
             <span className="api-key-icon">🔑</span>
             <div>
-              <h3>Gemini API Key Required</h3>
-              <p>Enter your free Google Gemini API key to enable AI analysis</p>
+              <h3>AI API Key Required</h3>
+              <p>Enter a free API key to enable AI-powered analysis</p>
             </div>
           </div>
           <div className="api-key-input-group">
@@ -311,7 +311,7 @@ export default function Research() {
               type="password"
               value={apiKeyInput}
               onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Enter your Gemini API key..."
+              placeholder="Enter your Groq or Gemini API key..."
               className="api-key-input"
               onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
             />
@@ -319,14 +319,24 @@ export default function Research() {
               Save Key
             </button>
           </div>
-          <a 
-            href="https://aistudio.google.com/app/apikey" 
-            target="_blank" 
-            rel="noopener noreferrer"
-            className="api-key-link"
-          >
-            Get a free API key from Google AI Studio →
-          </a>
+          <div className="api-key-links">
+            <a 
+              href="https://console.groq.com/keys" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="api-key-link primary"
+            >
+              Get free Groq API key (recommended) →
+            </a>
+            <a 
+              href="https://aistudio.google.com/app/apikey" 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="api-key-link"
+            >
+              Or get a Gemini API key →
+            </a>
+          </div>
         </div>
       )}
       

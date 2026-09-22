@@ -704,6 +704,12 @@ tbody tr:hover {
   box-shadow: 0 0 0 3px var(--purple-100);
 }
 
+.api-key-links {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
 .api-key-link {
   color: var(--purple-600);
   font-size: 0.85rem;
@@ -712,6 +718,11 @@ tbody tr:hover {
 
 .api-key-link:hover {
   text-decoration: underline;
+}
+
+.api-key-link.primary {
+  font-weight: 600;
+  color: var(--purple-700);
 }
 
 .api-key-saved {

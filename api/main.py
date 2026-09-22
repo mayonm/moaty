@@ -184,9 +184,11 @@ async def root():
 async def get_status():
     """Check if the AI service is configured and ready."""
     service = get_research_service()
+    provider = service.get_provider()
     return {
         "ai_configured": service.is_configured(),
-        "message": "AI is ready" if service.is_configured() else "Set GEMINI_API_KEY environment variable to enable AI"
+        "provider": provider,
+        "message": f"AI ready ({provider})" if service.is_configured() else "Set GROQ_API_KEY (free) or GEMINI_API_KEY to enable AI"
     }
 
 
@@ -217,7 +219,7 @@ async def research_company(request: ResearchRequest):
     if not service.is_configured():
         raise HTTPException(
             status_code=400,
-            detail="AI not configured. Set GEMINI_API_KEY environment variable on the server."
+            detail="AI not configured. Set GROQ_API_KEY (free, recommended) or GEMINI_API_KEY environment variable."
         )
     
     # Conduct research
