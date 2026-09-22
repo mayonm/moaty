@@ -160,11 +160,14 @@ class ValidationSummary(BaseModel):
 @app.get("/")
 async def root():
     """API root endpoint."""
+    service = get_research_service()
     return {
         "name": "Moaty API",
         "version": "2.0.0",
         "description": "AI-Powered Company Research Tool",
+        "ai_configured": service.is_configured(),
         "endpoints": {
+            "status": "/api/status - Check if AI is configured",
             "research": "/api/research (POST) - Analyze a company with AI",
             "chat": "/api/chat (POST) - Follow-up questions",
             "search": "/api/search - Search companies in database",
@@ -174,6 +177,16 @@ async def root():
             "validation": "/api/validation - Validation stats (legacy)",
             "methodology": "/api/methodology - Methodology docs"
         }
+    }
+
+
+@app.get("/api/status")
+async def get_status():
+    """Check if the AI service is configured and ready."""
+    service = get_research_service()
+    return {
+        "ai_configured": service.is_configured(),
+        "message": "AI is ready" if service.is_configured() else "Set GEMINI_API_KEY environment variable to enable AI"
     }
 
 
@@ -192,17 +205,19 @@ async def research_company(request: ResearchRequest):
     - Gemini AI analysis
     
     Returns analysis and a session_id for follow-up chat.
+    
+    Note: If GEMINI_API_KEY is set server-side, no api_key is needed in the request.
     """
     service = get_research_service()
     
-    # Set API key if provided
+    # Set API key if provided in request (overrides server-side key)
     if request.api_key:
         service.set_api_key(request.api_key)
     
-    if not service.is_configured() and not request.api_key:
+    if not service.is_configured():
         raise HTTPException(
             status_code=400,
-            detail="Gemini API key required. Provide it in the request or set GEMINI_API_KEY environment variable."
+            detail="AI not configured. Set GEMINI_API_KEY environment variable on the server."
         )
     
     # Conduct research

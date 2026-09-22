@@ -49,9 +49,14 @@ interface SearchSuggestion {
 }
 
 export default function Research() {
+  // Server-side AI configuration check
+  const [serverAiConfigured, setServerAiConfigured] = useState<boolean | null>(null)
+  const [checkingStatus, setCheckingStatus] = useState(true)
+  
+  // Client-side API key (fallback if server doesn't have one)
   const [apiKey, setApiKey] = useState('')
   const [apiKeyInput, setApiKeyInput] = useState('')
-  const [showApiKeyInput, setShowApiKeyInput] = useState(true)
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false)
   
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
@@ -67,12 +72,39 @@ export default function Research() {
   const chatEndRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // Check if server has AI configured on mount
   useEffect(() => {
-    const saved = localStorage.getItem('moaty_api_key')
-    if (saved) {
-      setApiKey(saved)
-      setShowApiKeyInput(false)
+    const checkServerStatus = async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/status`)
+        if (res.ok) {
+          const data = await res.json()
+          setServerAiConfigured(data.ai_configured)
+          if (!data.ai_configured) {
+            // Server doesn't have AI, check for saved client-side key
+            const saved = localStorage.getItem('moaty_api_key')
+            if (saved) {
+              setApiKey(saved)
+            } else {
+              setShowApiKeyInput(true)
+            }
+          }
+        }
+      } catch {
+        // If status check fails, assume server isn't configured
+        setServerAiConfigured(false)
+        const saved = localStorage.getItem('moaty_api_key')
+        if (saved) {
+          setApiKey(saved)
+        } else {
+          setShowApiKeyInput(true)
+        }
+      } finally {
+        setCheckingStatus(false)
+      }
     }
+    
+    checkServerStatus()
   }, [])
 
   useEffect(() => {
@@ -124,11 +156,16 @@ export default function Research() {
     setSuggestions([])
   }
 
+  // Check if AI is available (either server-side or client-side key)
+  const isAiAvailable = serverAiConfigured || !!apiKey
+
   const handleResearch = async (e?: React.FormEvent) => {
     e?.preventDefault()
     
     if (!searchQuery.trim()) return
-    if (!apiKey) {
+    
+    // If no AI available, show API key input
+    if (!isAiAvailable) {
       setShowApiKeyInput(true)
       return
     }
@@ -139,16 +176,22 @@ export default function Research() {
     setShowSuggestions(false)
     
     try {
+      const requestBody: Record<string, unknown> = {
+        company_name: searchQuery,
+        include_kalshi: true,
+        include_fundamentals: true,
+        include_economic_context: true
+      }
+      
+      // Only include API key if using client-side key
+      if (!serverAiConfigured && apiKey) {
+        requestBody.api_key = apiKey
+      }
+      
       const res = await fetch(`${API_URL}/api/research`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          company_name: searchQuery,
-          api_key: apiKey,
-          include_kalshi: true,
-          include_fundamentals: true,
-          include_economic_context: true
-        })
+        body: JSON.stringify(requestBody)
       })
       
       if (!res.ok) {
@@ -188,14 +231,20 @@ export default function Research() {
     setIsChatLoading(true)
     
     try {
+      const requestBody: Record<string, unknown> = {
+        session_id: result.session_id,
+        message: userMessage
+      }
+      
+      // Only include API key if using client-side key
+      if (!serverAiConfigured && apiKey) {
+        requestBody.api_key = apiKey
+      }
+      
       const res = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          session_id: result.session_id,
-          message: userMessage,
-          api_key: apiKey
-        })
+        body: JSON.stringify(requestBody)
       })
       
       if (!res.ok) {
@@ -224,11 +273,31 @@ export default function Research() {
     if (value === null || value === undefined) return 'N/A'
     return value.toFixed(decimals)
   }
+  
+  // Show loading while checking server status
+  if (checkingStatus) {
+    return (
+      <div className="research-page">
+        <div className="loading">
+          <div className="loading-spinner"></div>
+          <p>Loading...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="research-page">
-      {/* API Key Section */}
-      {showApiKeyInput ? (
+      {/* AI Status Badge - shown when server has AI configured */}
+      {serverAiConfigured && (
+        <div className="ai-ready-badge">
+          <span className="ai-ready-icon">✨</span>
+          <span>AI-Powered Search Ready</span>
+        </div>
+      )}
+      
+      {/* API Key Section - only shown when server doesn't have AI and user hasn't provided key */}
+      {!serverAiConfigured && showApiKeyInput && (
         <div className="api-key-card">
           <div className="api-key-header">
             <span className="api-key-icon">🔑</span>
@@ -259,7 +328,10 @@ export default function Research() {
             Get a free API key from Google AI Studio →
           </a>
         </div>
-      ) : (
+      )}
+      
+      {/* Client-side API key saved indicator */}
+      {!serverAiConfigured && !showApiKeyInput && apiKey && (
         <div className="api-key-saved">
           <span>✓ API key saved</span>
           <button onClick={clearApiKey} className="btn-link">Change</button>
