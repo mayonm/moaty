@@ -1,7 +1,9 @@
-import { useState, useRef, useEffect } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import blobUrl from '../assets/moaty-blob.png'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const TRY_COMPANIES = ['Apple', 'NVIDIA', 'Costco', 'Microsoft']
 
 interface KalshiMarket {
   ticker: string
@@ -48,94 +50,98 @@ interface SearchSuggestion {
   sector: string | null
 }
 
+const BAR_HEIGHTS = ['69%', '100%', '44%', '100%', '69%']
+const BAR_TONES = ['sage', 'blue', 'lilac', 'blue', 'sage']
+
+function MiniBars({ live = false }: { live?: boolean }) {
+  return (
+    <div className={`bars${live ? ' bars-live' : ''}`} aria-hidden="true">
+      {BAR_HEIGHTS.map((height, index) => (
+        <span key={index} className={`bar ${BAR_TONES[index]}`} style={{ height }} />
+      ))}
+    </div>
+  )
+}
+
+function SearchIcon() {
+  return (
+    <svg className="search-icon" width="20" height="20" viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.25" fill="none" stroke="currentColor" strokeWidth="1.7" />
+      <path d="M16.1 16.4L20.2 20.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function ArrowIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4.5 12h13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
+      <path d="M13 6.5L19.2 12 13 17.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+function GptMark() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+      <g fill="none" stroke="currentColor" strokeWidth="1.35">
+        <ellipse cx="12" cy="12" rx="3.05" ry="6.55" />
+        <ellipse cx="12" cy="12" rx="3.05" ry="6.55" transform="rotate(60 12 12)" />
+        <ellipse cx="12" cy="12" rx="3.05" ry="6.55" transform="rotate(120 12 12)" />
+      </g>
+    </svg>
+  )
+}
+
+function MicIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="9" y="3.2" width="6" height="10.2" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M6.8 11.2a5.2 5.2 0 0 0 10.4 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+      <path d="M12 16.4v3.2M9.2 19.6h5.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function sourceLabel(source: string) {
+  if (source.endsWith('_ai')) return 'Local model'
+  if (source === 'kalshi_markets') return 'Kalshi'
+  if (source === 'moaty_database') return 'Database'
+  return source.replaceAll('_', ' ')
+}
+
 export default function Research() {
-  // Server-side AI configuration check
-  const [serverAiConfigured, setServerAiConfigured] = useState<boolean | null>(null)
-  const [aiProvider, setAiProvider] = useState<string | null>(null)
-  const [aiModel, setAiModel] = useState<string | null>(null)
-  const [checkingStatus, setCheckingStatus] = useState(true)
-  
-  // Client-side API key (fallback if server doesn't have one)
-  const [apiKey, setApiKey] = useState('')
-  const [apiKeyInput, setApiKeyInput] = useState('')
-  const [showApiKeyInput, setShowApiKeyInput] = useState(false)
-  
   const [searchQuery, setSearchQuery] = useState('')
   const [suggestions, setSuggestions] = useState<SearchSuggestion[]>([])
   const [showSuggestions, setShowSuggestions] = useState(false)
-  
+
   const [isLoading, setIsLoading] = useState(false)
   const [result, setResult] = useState<ResearchResponse | null>(null)
-  
+
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([])
   const [chatInput, setChatInput] = useState('')
   const [isChatLoading, setIsChatLoading] = useState(false)
-  
+
   const chatEndRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
-
-  // Check if server has AI configured on mount
-  useEffect(() => {
-    const checkServerStatus = async () => {
-      try {
-        const res = await fetch(`${API_URL}/api/status`)
-        if (res.ok) {
-          const data = await res.json()
-          setServerAiConfigured(data.ai_configured)
-          setAiProvider(data.provider || null)
-          setAiModel(data.model || null)
-          if (!data.ai_configured) {
-            // Server doesn't have AI, check for saved client-side key
-            const saved = localStorage.getItem('moaty_api_key')
-            if (saved) {
-              setApiKey(saved)
-            } else {
-              setShowApiKeyInput(true)
-            }
-          }
-        }
-      } catch {
-        // If status check fails, assume server isn't configured
-        setServerAiConfigured(false)
-        const saved = localStorage.getItem('moaty_api_key')
-        if (saved) {
-          setApiKey(saved)
-        } else {
-          setShowApiKeyInput(true)
-        }
-      } finally {
-        setCheckingStatus(false)
-      }
-    }
-    
-    checkServerStatus()
-  }, [])
+  const findingsRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }, [chatMessages])
+  }, [chatMessages, isChatLoading])
 
-  const saveApiKey = () => {
-    if (apiKeyInput.trim()) {
-      setApiKey(apiKeyInput.trim())
-      localStorage.setItem('moaty_api_key', apiKeyInput.trim())
-      setShowApiKeyInput(false)
+  useEffect(() => {
+    if (result) {
+      findingsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
-  }
-
-  const clearApiKey = () => {
-    setApiKey('')
-    setApiKeyInput('')
-    localStorage.removeItem('moaty_api_key')
-    setShowApiKeyInput(true)
-  }
+  }, [result])
 
   const fetchSuggestions = async (query: string) => {
     if (query.length < 2) {
       setSuggestions([])
       return
     }
-    
+
     try {
       const res = await fetch(`${API_URL}/api/search?q=${encodeURIComponent(query)}`)
       if (res.ok) {
@@ -158,110 +164,92 @@ export default function Research() {
     setSearchQuery(suggestion.company_name || suggestion.ticker || '')
     setShowSuggestions(false)
     setSuggestions([])
+    searchInputRef.current?.focus()
   }
 
-  // Check if AI is available (either server-side or client-side key)
-  const isAiAvailable = serverAiConfigured || !!apiKey
+  const runResearch = async (rawQuery: string) => {
+    const query = rawQuery.trim()
+    if (!query || isLoading) return
 
-  const handleResearch = async (e?: React.FormEvent) => {
-    e?.preventDefault()
-    
-    if (!searchQuery.trim()) return
-    
-    // If no AI available, show API key input
-    if (!isAiAvailable) {
-      setShowApiKeyInput(true)
-      return
-    }
-    
+    setSearchQuery(query)
     setIsLoading(true)
     setResult(null)
     setChatMessages([])
     setShowSuggestions(false)
-    
+    setSuggestions([])
+
     try {
-      const requestBody: Record<string, unknown> = {
-        company_name: searchQuery,
-        include_kalshi: true,
-        include_fundamentals: true,
-        include_economic_context: true
-      }
-      
-      // Only include API key if using client-side key
-      if (!serverAiConfigured && apiKey) {
-        requestBody.api_key = apiKey
-      }
-      
       const res = await fetch(`${API_URL}/api/research`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          company_name: query,
+          include_kalshi: true,
+          include_fundamentals: true,
+          include_economic_context: true,
+        }),
       })
-      
+
       if (!res.ok) {
-        const err = await res.json()
+        const err = await res.json().catch(() => ({}))
         throw new Error(err.detail || 'Research failed')
       }
-      
+
       const data: ResearchResponse = await res.json()
       setResult(data)
-      
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Research failed'
       setResult({
         session_id: '',
-        company_name: searchQuery,
+        company_name: query,
         ticker: null,
         analysis: `Error: ${message}`,
         kalshi_markets: [],
         has_fundamentals: false,
         fundamentals_summary: null,
         data_sources: [],
-        errors: [message]
+        errors: [message],
       })
     } finally {
       setIsLoading(false)
     }
   }
 
+  const handleResearch = (e?: React.FormEvent) => {
+    e?.preventDefault()
+    void runResearch(searchQuery)
+  }
+
   const handleChat = async (e?: React.FormEvent) => {
     e?.preventDefault()
-    
+
     if (!chatInput.trim() || !result?.session_id) return
-    
+
     const userMessage = chatInput.trim()
     setChatInput('')
     setChatMessages(prev => [...prev, { role: 'user', content: userMessage }])
     setIsChatLoading(true)
-    
+
     try {
-      const requestBody: Record<string, unknown> = {
-        session_id: result.session_id,
-        message: userMessage
-      }
-      
-      // Only include API key if using client-side key
-      if (!serverAiConfigured && apiKey) {
-        requestBody.api_key = apiKey
-      }
-      
       const res = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody)
+        body: JSON.stringify({
+          session_id: result.session_id,
+          message: userMessage,
+        }),
       })
-      
+
       if (!res.ok) {
         throw new Error('Chat failed')
       }
-      
+
       const data = await res.json()
       setChatMessages(prev => [...prev, { role: 'assistant', content: data.response }])
-      
     } catch {
-      setChatMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: 'Sorry, I encountered an error. Please try again.' 
+      setChatMessages(prev => [...prev, {
+        role: 'assistant',
+        content: 'Sorry, I encountered an error. Please try again.',
       }])
     } finally {
       setIsChatLoading(false)
@@ -277,330 +265,279 @@ export default function Research() {
     if (value === null || value === undefined) return 'N/A'
     return value.toFixed(decimals)
   }
-  
-  // Show loading while checking server status
-  if (checkingStatus) {
-    return (
-      <div className="research-page">
-        <div className="loading">
-          <div className="loading-spinner"></div>
-          <p>Loading...</p>
-        </div>
-      </div>
-    )
-  }
+
+  const focusSearch = () => searchInputRef.current?.focus()
+  const showHomeCards = !result && !isLoading
 
   return (
-    <div className="research-page">
-      {/* AI Status Badge - shown when server has AI configured */}
-      {serverAiConfigured && (
-        <div className="ai-ready-badge">
-          <span className="ai-ready-icon">✨</span>
-          <span>
-            {aiProvider === 'local'
-              ? `Local AI Engine Ready${aiModel ? ` · ${aiModel}` : ''}`
-              : 'AI-Powered Search Ready'}
-          </span>
-        </div>
-      )}
-      
-      {/* API Key Section - only shown when server doesn't have AI and user hasn't provided key */}
-      {!serverAiConfigured && showApiKeyInput && (
-        <div className="api-key-card">
-          <div className="api-key-header">
-            <span className="api-key-icon">🔑</span>
-            <div>
-              <h3>AI API Key Required</h3>
-              <p>Enter a free API key to enable AI-powered analysis</p>
-            </div>
-          </div>
-          <div className="api-key-input-group">
-            <input
-              type="password"
-              value={apiKeyInput}
-              onChange={(e) => setApiKeyInput(e.target.value)}
-              placeholder="Enter your Groq or Gemini API key..."
-              className="api-key-input"
-              onKeyDown={(e) => e.key === 'Enter' && saveApiKey()}
-            />
-            <button onClick={saveApiKey} className="btn btn-primary">
-              Save Key
-            </button>
-          </div>
-          <div className="api-key-links">
-            <a 
-              href="https://console.groq.com/keys" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="api-key-link primary"
-            >
-              Get free Groq API key (recommended) →
-            </a>
-            <a 
-              href="https://aistudio.google.com/app/apikey" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="api-key-link"
-            >
-              Or get a Gemini API key →
-            </a>
-          </div>
-        </div>
-      )}
-      
-      {/* Client-side API key saved indicator */}
-      {!serverAiConfigured && !showApiKeyInput && apiKey && (
-        <div className="api-key-saved">
-          <span>✓ API key saved</span>
-          <button onClick={clearApiKey} className="btn-link">Change</button>
-        </div>
-      )}
+    <div className="stage">
+      <img className="blob" src={blobUrl} alt="" />
 
-      {/* Search Section */}
-      <div className="search-section">
-        <h1 className="search-title">Research Any Company</h1>
-        <p className="search-subtitle">
-          Get AI-powered moat analysis with prediction market insights
-        </p>
-        
-        <form onSubmit={handleResearch} className="search-form">
-          <div className="search-input-wrapper">
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={handleSearchChange}
-              onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
-              onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
-              placeholder="Enter company name or ticker (e.g., Apple, AAPL)..."
-              className="search-input"
-              disabled={isLoading}
-            />
-            <button 
-              type="submit" 
-              className="btn btn-primary search-btn"
-              disabled={isLoading || !searchQuery.trim()}
-            >
-              {isLoading ? (
-                <span className="btn-loading">Analyzing...</span>
-              ) : (
-                'Research'
+      <section className="hero">
+        <div className="hero-copy">
+          <p className="eyebrow">YOUR RESEARCH WORKSPACE</p>
+          <h1>Understand the business.</h1>
+          <p className="lede">
+            Enter a company to explore its advantage, financial durability, and competitive risks.
+          </p>
+
+          <form onSubmit={handleResearch} className="search-form">
+            <div className="search-wrap">
+              <div className="search-field">
+                <SearchIcon />
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={handleSearchChange}
+                  onFocus={() => suggestions.length > 0 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 180)}
+                  placeholder="Company name or ticker"
+                  className="search-input"
+                  aria-label="Company name or ticker"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={isLoading}
+                />
+                <button
+                  type="submit"
+                  className="search-go"
+                  disabled={isLoading || !searchQuery.trim()}
+                >
+                  {isLoading ? 'Researching' : 'Research'}
+                  <ArrowIcon />
+                </button>
+              </div>
+
+              {showSuggestions && suggestions.length > 0 && (
+                <div className="suggestions" role="listbox">
+                  {suggestions.map((suggestion, index) => (
+                    <button
+                      key={`${suggestion.ticker}-${index}`}
+                      type="button"
+                      className="suggestion"
+                      onMouseDown={(event) => {
+                        event.preventDefault()
+                        selectSuggestion(suggestion)
+                      }}
+                    >
+                      <span className="suggestion-ticker">{suggestion.ticker || '—'}</span>
+                      <span className="suggestion-name">{suggestion.company_name}</span>
+                      {suggestion.sector && <span className="suggestion-sector">{suggestion.sector}</span>}
+                    </button>
+                  ))}
+                </div>
               )}
-            </button>
-
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="suggestions-dropdown">
-                {suggestions.map((s, i) => (
-                  <button
-                    key={i}
-                    type="button"
-                    className="suggestion-item"
-                    onClick={() => selectSuggestion(s)}
-                  >
-                    <span className="suggestion-ticker">{s.ticker || '—'}</span>
-                    <span className="suggestion-name">{s.company_name}</span>
-                    {s.sector && <span className="suggestion-sector">{s.sector}</span>}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-          {isLoading && (
-            <p className="search-wait">Running the local AI engine on this machine. This usually takes under a minute.</p>
-          )}
-        </form>
-      </div>
-
-      {/* Results Section */}
-      {result && (
-        <div className="results-section">
-          {/* Company Header */}
-          <div className="result-header">
-            <div className="result-company">
-              <div className="company-avatar">
-                {(result.ticker || result.company_name)[0].toUpperCase()}
-              </div>
-              <div>
-                <h2>{result.company_name}</h2>
-                {result.ticker && <span className="ticker-badge">{result.ticker}</span>}
-              </div>
             </div>
-            <div className="data-sources">
-              {result.data_sources.map((source, i) => (
-                <span key={i} className="source-badge">
-                  {source.endsWith('_ai') && '🤖 AI'}
-                  {source === 'kalshi_markets' && '📊 Kalshi'}
-                  {source === 'moaty_database' && '💾 Database'}
-                </span>
+          </form>
+
+          <div className="try-row">
+            <span className="try-label">Try</span>
+            {TRY_COMPANIES.map((name) => (
+              <button
+                key={name}
+                type="button"
+                className="chip"
+                onClick={() => { void runResearch(name) }}
+                disabled={isLoading}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {showHomeCards && (
+        <section className="card-row" aria-label="Research paths">
+          <article className="research-card">
+            <p className="kicker">01 / RESEARCH</p>
+            <h2>The advantage</h2>
+            <MiniBars />
+            <div className="card-foot">
+              <button type="button" className="text-btn" onClick={focusSearch}>Look closer</button>
+              <button type="button" className="text-btn plus" onClick={focusSearch} aria-label="Look closer">+</button>
+            </div>
+          </article>
+
+          <article className="research-card signals">
+            <p className="kicker">02 / RESEARCH</p>
+            <h2>The signals</h2>
+            <MiniBars />
+            <div className="gpt-pill">
+              <GptMark />
+              <span>Work with ChatGPT</span>
+              <MicIcon />
+            </div>
+          </article>
+
+          <article className="research-card">
+            <p className="kicker">03 / RESEARCH</p>
+            <h2>The questions</h2>
+            <MiniBars />
+            <div className="card-foot">
+              <button type="button" className="text-btn" onClick={focusSearch}>Look closer</button>
+              <button type="button" className="text-btn plus" onClick={focusSearch} aria-label="Look closer">+</button>
+            </div>
+          </article>
+        </section>
+      )}
+
+      {isLoading && (
+        <section className="status-panel" aria-live="polite">
+          <p className="eyebrow">RESEARCH</p>
+          <h2>Reading {searchQuery}.</h2>
+          <p className="lede">
+            The local model is working through the advantage, the numbers, and the risks. This usually takes about half a minute.
+          </p>
+          <MiniBars live />
+        </section>
+      )}
+
+      {result && (
+        <section className="findings" ref={findingsRef}>
+          <header className="findings-head">
+            <p className="eyebrow">COMPANY RESEARCH</p>
+            <h2>{result.company_name}</h2>
+            <div className="findings-meta">
+              {result.ticker && <span className="ticker-pill">{result.ticker}</span>}
+              {result.fundamentals_summary?.sector && (
+                <span className="ticker-pill">{result.fundamentals_summary.sector}</span>
+              )}
+              {result.data_sources.map((source) => (
+                <span key={source} className="ticker-pill quiet">{sourceLabel(source)}</span>
               ))}
             </div>
-          </div>
+          </header>
 
-          <div className="results-grid">
-            {/* Main Analysis */}
-            <div className="analysis-panel">
-              <div className="panel-header">
-                <h3>AI Moat Analysis</h3>
-              </div>
+          <div className="findings-grid">
+            <article className="sheet">
+              <p className="kicker">THE WRITEUP</p>
+              <h3>The advantage</h3>
               <div className="analysis-content">
                 <ReactMarkdown>{result.analysis}</ReactMarkdown>
               </div>
-            </div>
+            </article>
 
-            {/* Sidebar */}
-            <div className="sidebar-panels">
-              {/* Fundamentals */}
+            <div className="findings-side">
               {result.has_fundamentals && result.fundamentals_summary && (
-                <div className="sidebar-card">
-                  <h4>Historical Data</h4>
-                  <p className="sidebar-note">Illustrative decay fit for the live demo.</p>
-                  <div className="metric-grid">
-                    <div className="metric">
-                      <span className="metric-label">Sector</span>
-                      <span className="metric-value">{result.fundamentals_summary.sector || 'N/A'}</span>
+                <article className="sheet">
+                  <p className="kicker">THE NUMBERS</p>
+                  <h3>Historical metrics</h3>
+                  <p className="sheet-note">Illustrative decay fit for the live demo.</p>
+                  <dl className="metric-list">
+                    <div>
+                      <dt>Sector</dt>
+                      <dd>{result.fundamentals_summary.sector || 'N/A'}</dd>
                     </div>
-                    <div className="metric">
-                      <span className="metric-label">Decay Rate (λ)</span>
-                      <span className="metric-value">{formatDecimal(result.fundamentals_summary.decay_rate)}</span>
+                    <div>
+                      <dt>Decay rate (λ)</dt>
+                      <dd>{formatDecimal(result.fundamentals_summary.decay_rate)}</dd>
                     </div>
-                    <div className="metric">
-                      <span className="metric-label">Initial ROIC</span>
-                      <span className="metric-value">{formatPercent(result.fundamentals_summary.initial_roic)}</span>
+                    <div>
+                      <dt>Initial ROIC</dt>
+                      <dd>{formatPercent(result.fundamentals_summary.initial_roic)}</dd>
                     </div>
-                    <div className="metric">
-                      <span className="metric-label">Terminal ROIC</span>
-                      <span className="metric-value">{formatPercent(result.fundamentals_summary.terminal_roic)}</span>
+                    <div>
+                      <dt>Terminal ROIC</dt>
+                      <dd>{formatPercent(result.fundamentals_summary.terminal_roic)}</dd>
                     </div>
-                    <div className="metric">
-                      <span className="metric-label">Fit Quality (R²)</span>
-                      <span className="metric-value">{formatDecimal(result.fundamentals_summary.r_squared, 3)}</span>
+                    <div>
+                      <dt>Fit quality (R²)</dt>
+                      <dd>{formatDecimal(result.fundamentals_summary.r_squared, 3)}</dd>
                     </div>
-                    <div className="metric">
-                      <span className="metric-label">Data Periods</span>
-                      <span className="metric-value">{result.fundamentals_summary.roic_periods}</span>
+                    <div>
+                      <dt>Data periods</dt>
+                      <dd>{result.fundamentals_summary.roic_periods}</dd>
                     </div>
-                  </div>
-                </div>
+                  </dl>
+                </article>
               )}
 
-              {/* Kalshi Markets */}
               {result.kalshi_markets.length > 0 && (
-                <div className="sidebar-card">
-                  <h4>Prediction Markets</h4>
-                  <div className="kalshi-list">
-                    {result.kalshi_markets.slice(0, 5).map((market, i) => (
-                      <a 
-                        key={i} 
-                        href={market.url} 
-                        target="_blank" 
+                <article className="sheet">
+                  <p className="kicker">THE MARKET</p>
+                  <h3>Kalshi markets</h3>
+                  <div className="market-list">
+                    {result.kalshi_markets.slice(0, 5).map((market) => (
+                      <a
+                        key={market.ticker}
+                        href={market.url}
+                        target="_blank"
                         rel="noopener noreferrer"
-                        className="kalshi-item"
+                        className="market-row"
                       >
-                        <div className="kalshi-title">{market.title}</div>
-                        <div className="kalshi-meta">
-                          <span className="kalshi-prob">{Math.round(market.yes_price)}% YES</span>
-                          {market.volume > 0 && (
-                            <span className="kalshi-volume">${market.volume.toLocaleString()} vol</span>
-                          )}
-                        </div>
+                        <span className="market-title">{market.title}</span>
+                        <span className="market-meta">
+                          <span>{Math.round(market.yes_price)}% yes</span>
+                          {market.volume > 0 && <span>${market.volume.toLocaleString()} vol</span>}
+                        </span>
                       </a>
                     ))}
                   </div>
-                </div>
+                </article>
               )}
 
-              {/* Errors */}
               {result.errors.length > 0 && (
-                <div className="sidebar-card warning-card">
-                  <h4>Notices</h4>
-                  <ul className="error-list">
-                    {result.errors.map((err, i) => (
-                      <li key={i}>{err}</li>
+                <article className="sheet notice-sheet">
+                  <p className="kicker">NOTICES</p>
+                  <ul className="notice-list">
+                    {result.errors.map((err) => (
+                      <li key={err}>{err}</li>
                     ))}
                   </ul>
-                </div>
+                </article>
               )}
             </div>
           </div>
 
-          {/* Chat Section */}
-          <div className="chat-section">
-            <div className="chat-header">
-              <h3>Ask Follow-up Questions</h3>
-              <span className="chat-hint">Ask anything about {result.company_name}</span>
-            </div>
-            
+          <article className="sheet chat-sheet">
+            <p className="kicker">FOLLOW UP</p>
+            <h3>Ask about {result.company_name}</h3>
+
             {chatMessages.length > 0 && (
-              <div className="chat-messages">
-                {chatMessages.map((msg, i) => (
-                  <div key={i} className={`chat-message ${msg.role}`}>
-                    <div className="message-avatar">
-                      {msg.role === 'user' ? '👤' : '🤖'}
-                    </div>
-                    <div className="message-content">
-                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+              <div className="chat-log">
+                {chatMessages.map((message, index) => (
+                  <div key={index} className={`chat-line ${message.role}`}>
+                    <span className="chat-who">{message.role === 'user' ? 'You' : 'Moaty'}</span>
+                    <div className="chat-body">
+                      <ReactMarkdown>{message.content}</ReactMarkdown>
                     </div>
                   </div>
                 ))}
                 {isChatLoading && (
-                  <div className="chat-message assistant">
-                    <div className="message-avatar">🤖</div>
-                    <div className="message-content typing">
-                      <span></span><span></span><span></span>
+                  <div className="chat-line assistant">
+                    <span className="chat-who">Moaty</span>
+                    <div className="chat-body typing" aria-label="Writing">
+                      <span /><span /><span />
                     </div>
                   </div>
                 )}
                 <div ref={chatEndRef} />
               </div>
             )}
-            
-            <form onSubmit={handleChat} className="chat-input-form">
+
+            <form onSubmit={handleChat} className="chat-form">
               <input
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="Ask a question about this company..."
+                placeholder={`Ask a question about ${result.company_name}`}
                 className="chat-input"
                 disabled={isChatLoading || !result.session_id}
+                aria-label="Follow-up question"
               />
-              <button 
-                type="submit" 
-                className="btn btn-secondary"
+              <button
+                type="submit"
+                className="search-go chat-go"
                 disabled={isChatLoading || !chatInput.trim() || !result.session_id}
               >
                 Send
+                <ArrowIcon />
               </button>
             </form>
-          </div>
-        </div>
-      )}
-
-      {/* Empty State */}
-      {!result && !isLoading && (
-        <div className="empty-state-research">
-          <div className="feature-grid">
-            <div className="feature-card">
-              <span className="feature-icon">🤖</span>
-              <h4>AI Analysis</h4>
-              <p>Get comprehensive moat analysis from the local AI engine</p>
-            </div>
-            <div className="feature-card">
-              <span className="feature-icon">📊</span>
-              <h4>Prediction Markets</h4>
-              <p>See what Kalshi traders expect for company events</p>
-            </div>
-            <div className="feature-card">
-              <span className="feature-icon">💬</span>
-              <h4>Interactive Chat</h4>
-              <p>Ask follow-up questions to dive deeper into analysis</p>
-            </div>
-            <div className="feature-card">
-              <span className="feature-icon">📈</span>
-              <h4>Historical Data</h4>
-              <p>Access ROIC decay metrics from our database</p>
-            </div>
-          </div>
-        </div>
+          </article>
+        </section>
       )}
     </div>
   )
