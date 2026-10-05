@@ -5,11 +5,12 @@ FastAPI backend for AI-powered company research.
 Combines Kalshi prediction markets, company fundamentals, and Gemini AI analysis.
 """
 
+import asyncio
 import sqlite3
 import sys
 from pathlib import Path
 from typing import Optional, List
-from contextlib import contextmanager
+from contextlib import asynccontextmanager, contextmanager
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
@@ -27,10 +28,30 @@ from src.kalshi_client import get_kalshi_client
 DB_PATH = Path(__file__).parent.parent / "moaty.db"
 METHODOLOGY_PATH = Path(__file__).parent.parent / "METHODOLOGY.md"
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Prepare the demo database and warm the local AI engine before serving."""
+    try:
+        from src.seed_demo import ensure_demo_database
+        ensure_demo_database(DB_PATH)
+    except Exception as exc:
+        print(f"Demo database setup failed: {exc}")
+
+    try:
+        service = get_research_service()
+        ready = service.is_configured()
+        print(f"AI ready={ready} provider={service.get_provider()} model={service.get_model_name()}")
+    except Exception as exc:
+        print(f"AI warmup failed: {exc}")
+
+    yield
+
+
 app = FastAPI(
     title="Moaty API",
-    description="AI-Powered Company Research Tool - Analyze competitive moats with prediction markets and AI",
-    version="2.0.0"
+    description="AI-Powered Company Research Tool - Analyze competitive moats with prediction markets and a local AI engine",
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
 # CORS for local development
@@ -185,10 +206,16 @@ async def get_status():
     """Check if the AI service is configured and ready."""
     service = get_research_service()
     provider = service.get_provider()
+    model = service.get_model_name()
+    if service.is_configured():
+        message = f"Local AI engine ready ({model})" if provider == "local" else f"AI ready ({provider})"
+    else:
+        message = "Local AI engine is still starting. If this persists, restart the API so the model can download."
     return {
         "ai_configured": service.is_configured(),
         "provider": provider,
-        "message": f"AI ready ({provider})" if service.is_configured() else "Set GROQ_API_KEY (free) or GEMINI_API_KEY to enable AI"
+        "model": model,
+        "message": message,
     }
 
 
@@ -219,16 +246,17 @@ async def research_company(request: ResearchRequest):
     if not service.is_configured():
         raise HTTPException(
             status_code=400,
-            detail="AI not configured. Set GROQ_API_KEY (free, recommended) or GEMINI_API_KEY environment variable."
+            detail="Local AI engine is not ready yet. Wait for the model to finish loading and try again."
         )
     
-    # Conduct research
-    result = service.research(
-        company_name=request.company_name,
-        ticker=request.ticker,
-        include_kalshi=request.include_kalshi,
-        include_fundamentals=request.include_fundamentals,
-        include_economic_context=request.include_economic_context
+    # Conduct research off the event loop. Local inference can take a little while.
+    result = await asyncio.to_thread(
+        service.research,
+        request.company_name,
+        request.ticker,
+        request.include_kalshi,
+        request.include_fundamentals,
+        request.include_economic_context,
     )
     
     # Format Kalshi markets for response
@@ -289,11 +317,11 @@ async def chat_followup(request: ChatRequest):
     if not service.is_configured():
         raise HTTPException(
             status_code=400,
-            detail="Gemini API key required."
+            detail="Local AI engine is not ready yet."
         )
     
     # Get chat response
-    response = service.chat(request.session_id, request.message)
+    response = await asyncio.to_thread(service.chat, request.session_id, request.message)
     
     return ChatResponse(
         response=response,

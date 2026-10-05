@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 
-const API_BASE = ''
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export default function Methodology() {
   const [content, setContent] = useState<string>('')

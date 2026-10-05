@@ -1,14 +1,17 @@
 """
 AI Client - Unified interface for multiple AI providers
 
-Supports:
-- Groq (free, no credit card required) - DEFAULT
-- Google Gemini (free tier available)
+Default engine is a small local model (Qwen2.5-1.5B-Instruct via llama.cpp).
+It runs on CPU, costs nothing, and does not need an API key.
 
-Uses OpenAI-compatible API for Groq, native SDK for Gemini.
+Optional cloud fallbacks, used only when the local model is disabled:
+- Groq
+- Google Gemini
 """
 
 import os
+import threading
+from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
@@ -16,9 +19,19 @@ from dataclasses import dataclass
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODEL = "llama-3.3-70b-versatile"  # Best free model on Groq
 
+# Local engine. Qwen2.5 1.5B Instruct is small enough for a laptop CPU
+# and still follows the moat-analysis format.
+LOCAL_MODEL_REPO = "bartowski/Qwen2.5-1.5B-Instruct-GGUF"
+LOCAL_MODEL_FILE = "Qwen2.5-1.5B-Instruct-Q4_K_M.gguf"
+LOCAL_MODEL_NAME = "Qwen2.5-1.5B-Instruct"
+MODEL_DIR = Path(__file__).parent.parent / "models"
+LOCAL_MAX_TOKENS = 700
+LOCAL_CHAT_MAX_TOKENS = 320
+
 # System prompt for moat analysis
 MOAT_ANALYSIS_PROMPT = """You are an expert financial analyst specializing in competitive moat analysis. 
 Your role is to analyze companies and provide clear, actionable insights about their competitive advantages.
+Keep the full response under 280 words. Prefer short bullets over long paragraphs.
 
 When analyzing a company, structure your response as follows:
 
@@ -37,6 +50,7 @@ Comment on the company's financial metrics if data is provided.
 
 ## Prediction Market Sentiment
 If prediction market data is provided, analyze what the market expects and any notable odds.
+Only mention markets that are listed in the data. Do not invent markets, sports, or events.
 
 ## Investment Considerations
 Provide balanced considerations for investors (not recommendations).
@@ -57,25 +71,48 @@ class AIClient:
     Unified AI client supporting multiple providers.
     
     Priority order:
-    1. GROQ_API_KEY (free, recommended)
-    2. GEMINI_API_KEY (free tier available)
+    1. Local Qwen2.5-1.5B (default, no API key)
+    2. GROQ_API_KEY, only if MOATY_DISABLE_LOCAL=1
+    3. GEMINI_API_KEY, only if MOATY_DISABLE_LOCAL=1
     """
     
     def __init__(self):
-        """Initialize the AI client with available API keys."""
+        """Initialize the AI client with the local engine or an optional API key."""
         self.groq_key = os.environ.get("GROQ_API_KEY")
         self.gemini_key = os.environ.get("GEMINI_API_KEY")
         
         self.provider = None
         self.client = None
+        self.llm = None
+        self.model_name: Optional[str] = None
         self.gemini_model = None
         self.chat_histories: Dict[str, List[Dict]] = {}
+        self._lock = threading.Lock()
+        self._setup_error: Optional[str] = None
         
         self._configure()
     
     def _configure(self):
-        """Configure the client with available API keys."""
-        # Try Groq first (recommended free option)
+        """Configure the client. Local model wins unless explicitly disabled."""
+        self.provider = None
+        self.client = None
+        self.llm = None
+        self.gemini_model = None
+        self.model_name = None
+        self._setup_error = None
+
+        use_local = os.environ.get("MOATY_DISABLE_LOCAL") != "1"
+        if use_local:
+            try:
+                if self._configure_local():
+                    self.provider = "local"
+                    self.model_name = LOCAL_MODEL_NAME
+                    return
+            except Exception as e:
+                self._setup_error = str(e)
+                print(f"Failed to configure local AI: {e}")
+        
+        # Cloud fallbacks when the local engine is turned off or failed to load.
         if self.groq_key:
             try:
                 from openai import OpenAI
@@ -84,11 +121,11 @@ class AIClient:
                     base_url=GROQ_BASE_URL
                 )
                 self.provider = "groq"
+                self.model_name = GROQ_MODEL
                 return
             except Exception as e:
                 print(f"Failed to configure Groq: {e}")
         
-        # Fall back to Gemini
         if self.gemini_key:
             try:
                 import google.generativeai as genai
@@ -98,9 +135,67 @@ class AIClient:
                     system_instruction=MOAT_ANALYSIS_PROMPT
                 )
                 self.provider = "gemini"
+                self.model_name = "gemini-2.0-flash"
                 return
             except Exception as e:
                 print(f"Failed to configure Gemini: {e}")
+
+    def ensure_local_model(self) -> Path:
+        """Return the GGUF path, downloading it from Hugging Face if needed."""
+        override = os.environ.get("MOATY_MODEL_PATH")
+        path = Path(override) if override else MODEL_DIR / LOCAL_MODEL_FILE
+        if path.exists() and path.stat().st_size > 900_000_000:
+            return path
+
+        path.parent.mkdir(parents=True, exist_ok=True)
+        from huggingface_hub import hf_hub_download
+
+        print(f"Downloading local AI engine {LOCAL_MODEL_NAME}...")
+        downloaded = hf_hub_download(
+            repo_id=LOCAL_MODEL_REPO,
+            filename=LOCAL_MODEL_FILE,
+            local_dir=str(path.parent),
+        )
+        return Path(downloaded)
+
+    def _configure_local(self) -> bool:
+        """Load the local GGUF model with llama.cpp."""
+        model_path = self.ensure_local_model()
+        from llama_cpp import Llama
+
+        threads = max(1, min(4, os.cpu_count() or 2))
+        self.llm = Llama(
+            model_path=str(model_path),
+            n_ctx=2048,
+            n_threads=threads,
+            n_batch=128,
+            verbose=False,
+        )
+        return True
+
+    def _complete(self, messages: List[Dict[str, str]], max_tokens: int) -> str:
+        """Run one chat completion on the active provider."""
+        if self.provider == "local":
+            # Keep the prompt inside the 2048 token window without duplicating short chats.
+            trimmed = messages if len(messages) <= 8 else messages[:2] + messages[-6:]
+            with self._lock:
+                response = self.llm.create_chat_completion(
+                    messages=trimmed,
+                    temperature=0.6,
+                    max_tokens=max_tokens,
+                )
+            return response["choices"][0]["message"]["content"] or ""
+
+        if self.provider == "groq":
+            response = self.client.chat.completions.create(
+                model=GROQ_MODEL,
+                messages=messages,
+                temperature=0.7,
+                max_tokens=max_tokens,
+            )
+            return response.choices[0].message.content or ""
+
+        raise RuntimeError(f"Unsupported provider for chat completion: {self.provider}")
     
     def set_groq_key(self, api_key: str):
         """Set Groq API key."""
@@ -128,6 +223,14 @@ class AIClient:
     def get_provider(self) -> Optional[str]:
         """Get the current AI provider name."""
         return self.provider
+
+    def get_model_name(self) -> Optional[str]:
+        """Get the model id currently serving analysis."""
+        return self.model_name
+
+    def get_setup_error(self) -> Optional[str]:
+        """Return the last local-engine setup error, if configuration failed."""
+        return self._setup_error
     
     def _build_prompt(
         self,
@@ -150,7 +253,7 @@ class AIClient:
             
             if fundamentals.get("roic_history"):
                 prompt_parts.append("**ROIC History:**\n")
-                for year, roic in fundamentals["roic_history"]:
+                for year, roic in fundamentals["roic_history"][-5:]:
                     roic_pct = roic * 100 if isinstance(roic, float) else roic
                     prompt_parts.append(f"- {year}: {roic_pct:.1f}%\n")
             
@@ -181,7 +284,7 @@ class AIClient:
             prompt_parts.append(additional_context)
             prompt_parts.append("\n\n")
         
-        prompt_parts.append("Please provide a comprehensive moat analysis.")
+        prompt_parts.append("Please provide a concise moat analysis.")
         
         return "".join(prompt_parts)
     
@@ -207,28 +310,27 @@ class AIClient:
             AI-generated analysis
         """
         if not self.is_configured():
-            return "Error: No AI API key configured. Set GROQ_API_KEY or GEMINI_API_KEY."
+            return "Error: Local AI engine is not ready. Restart the API so it can download the model, or set GROQ_API_KEY."
         
         prompt = self._build_prompt(
             company_name, ticker, fundamentals, kalshi_markets, additional_context
         )
         
         try:
-            if self.provider == "groq":
-                response = self.client.chat.completions.create(
-                    model=GROQ_MODEL,
-                    messages=[
+            if self.provider in ("local", "groq"):
+                return self._complete(
+                    [
                         {"role": "system", "content": MOAT_ANALYSIS_PROMPT},
-                        {"role": "user", "content": prompt}
+                        {"role": "user", "content": prompt},
                     ],
-                    temperature=0.7,
-                    max_tokens=2000
+                    LOCAL_MAX_TOKENS if self.provider == "local" else 2000,
                 )
-                return response.choices[0].message.content
             
             elif self.provider == "gemini":
                 response = self.gemini_model.generate_content(prompt)
                 return response.text
+
+            return "Error: AI provider is not available."
             
         except Exception as e:
             error_msg = str(e)
@@ -257,7 +359,7 @@ class AIClient:
             AI response
         """
         if not self.is_configured():
-            return "Error: No AI API key configured."
+            return "Error: Local AI engine is not ready."
         
         # Initialize chat history if needed
         if session_id not in self.chat_histories:
@@ -277,14 +379,11 @@ class AIClient:
         })
         
         try:
-            if self.provider == "groq":
-                response = self.client.chat.completions.create(
-                    model=GROQ_MODEL,
-                    messages=self.chat_histories[session_id],
-                    temperature=0.7,
-                    max_tokens=1500
+            if self.provider in ("local", "groq"):
+                assistant_message = self._complete(
+                    self.chat_histories[session_id],
+                    LOCAL_CHAT_MAX_TOKENS if self.provider == "local" else 1500,
                 )
-                assistant_message = response.choices[0].message.content
                 
             elif self.provider == "gemini":
                 # For Gemini, we need to format the history differently
@@ -364,6 +463,6 @@ if __name__ == "__main__":
         )
         print(result[:500] + "..." if len(result) > 500 else result)
     else:
-        print("No API key configured.")
-        print("Set GROQ_API_KEY (free, recommended) or GEMINI_API_KEY")
-        print("\nGet a free Groq API key at: https://console.groq.com")
+        print("Local AI engine is not ready.")
+        if client.get_setup_error():
+            print(client.get_setup_error())

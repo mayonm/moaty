@@ -51,6 +51,8 @@ interface SearchSuggestion {
 export default function Research() {
   // Server-side AI configuration check
   const [serverAiConfigured, setServerAiConfigured] = useState<boolean | null>(null)
+  const [aiProvider, setAiProvider] = useState<string | null>(null)
+  const [aiModel, setAiModel] = useState<string | null>(null)
   const [checkingStatus, setCheckingStatus] = useState(true)
   
   // Client-side API key (fallback if server doesn't have one)
@@ -80,6 +82,8 @@ export default function Research() {
         if (res.ok) {
           const data = await res.json()
           setServerAiConfigured(data.ai_configured)
+          setAiProvider(data.provider || null)
+          setAiModel(data.model || null)
           if (!data.ai_configured) {
             // Server doesn't have AI, check for saved client-side key
             const saved = localStorage.getItem('moaty_api_key')
@@ -292,7 +296,11 @@ export default function Research() {
       {serverAiConfigured && (
         <div className="ai-ready-badge">
           <span className="ai-ready-icon">✨</span>
-          <span>AI-Powered Search Ready</span>
+          <span>
+            {aiProvider === 'local'
+              ? `Local AI Engine Ready${aiModel ? ` · ${aiModel}` : ''}`
+              : 'AI-Powered Search Ready'}
+          </span>
         </div>
       )}
       
@@ -379,7 +387,7 @@ export default function Research() {
                 'Research'
               )}
             </button>
-            
+
             {showSuggestions && suggestions.length > 0 && (
               <div className="suggestions-dropdown">
                 {suggestions.map((s, i) => (
@@ -397,6 +405,9 @@ export default function Research() {
               </div>
             )}
           </div>
+          {isLoading && (
+            <p className="search-wait">Running the local AI engine on this machine. This usually takes under a minute.</p>
+          )}
         </form>
       </div>
 
@@ -417,7 +428,7 @@ export default function Research() {
             <div className="data-sources">
               {result.data_sources.map((source, i) => (
                 <span key={i} className="source-badge">
-                  {source === 'gemini_ai' && '🤖 AI'}
+                  {source.endsWith('_ai') && '🤖 AI'}
                   {source === 'kalshi_markets' && '📊 Kalshi'}
                   {source === 'moaty_database' && '💾 Database'}
                 </span>
@@ -442,6 +453,7 @@ export default function Research() {
               {result.has_fundamentals && result.fundamentals_summary && (
                 <div className="sidebar-card">
                   <h4>Historical Data</h4>
+                  <p className="sidebar-note">Illustrative decay fit for the live demo.</p>
                   <div className="metric-grid">
                     <div className="metric">
                       <span className="metric-label">Sector</span>
@@ -486,7 +498,7 @@ export default function Research() {
                       >
                         <div className="kalshi-title">{market.title}</div>
                         <div className="kalshi-meta">
-                          <span className="kalshi-prob">{market.yes_price}% YES</span>
+                          <span className="kalshi-prob">{Math.round(market.yes_price)}% YES</span>
                           {market.volume > 0 && (
                             <span className="kalshi-volume">${market.volume.toLocaleString()} vol</span>
                           )}
@@ -570,7 +582,7 @@ export default function Research() {
             <div className="feature-card">
               <span className="feature-icon">🤖</span>
               <h4>AI Analysis</h4>
-              <p>Get comprehensive moat analysis powered by Google Gemini</p>
+              <p>Get comprehensive moat analysis from the local AI engine</p>
             </div>
             <div className="feature-card">
               <span className="feature-icon">📊</span>
