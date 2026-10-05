@@ -44,7 +44,7 @@ input {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  padding: 32px 56px 0;
+  padding: 28px 64px 0;
 }
 
 .product-link {
@@ -61,10 +61,10 @@ input {
 .wordmark {
   color: var(--ink);
   text-decoration: none;
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  letter-spacing: -0.058em;
-  line-height: 0.9;
+  letter-spacing: -0.06em;
+  line-height: 1;
 }
 
 .main {
@@ -72,22 +72,22 @@ input {
 }
 
 .stage {
-  width: min(1080px, calc(100% - 72px));
+  width: min(880px, calc(100% - 96px));
   margin: 0 auto;
-  padding: clamp(72px, 10vh, 128px) 0 88px;
-  position: relative;
+  padding: 118px 0 72px;
 }
 
 .blob {
   position: absolute;
-  top: clamp(48px, 7vh, 92px);
-  right: clamp(-132px, -8vw, -36px);
-  width: 118px;
+  top: 214px;
+  right: 42px;
+  width: 92px;
   height: auto;
   pointer-events: none;
   user-select: none;
   image-rendering: pixelated;
   image-rendering: crisp-edges;
+  z-index: 2;
 }
 
 .hero-copy {
@@ -114,14 +114,14 @@ input {
 }
 
 .hero h1 {
-  font-size: clamp(46px, 4.7vw, 64px);
-  margin-bottom: 18px;
+  font-size: 48px;
+  margin-bottom: 16px;
 }
 
 .lede {
   margin: 0;
   color: var(--muted);
-  font-size: 18px;
+  font-size: 16.5px;
   font-weight: 400;
   line-height: 1.45;
   letter-spacing: -0.011em;
@@ -147,9 +147,9 @@ input {
   gap: 12px;
   background: #fff;
   border: 1px solid var(--search-line);
-  border-radius: 16px;
-  min-height: 74px;
-  padding: 8px 8px 8px 18px;
+  border-radius: 14px;
+  min-height: 68px;
+  padding: 7px 7px 7px 16px;
 }
 
 .search-icon {
@@ -180,15 +180,15 @@ input {
   border: 0;
   background: var(--btn);
   color: var(--btn-ink);
-  height: 52px;
-  padding: 0 18px 0 20px;
-  border-radius: 11px;
-  font-size: 16px;
+  height: 48px;
+  padding: 0 16px 0 18px;
+  border-radius: 10px;
+  font-size: 15px;
   font-weight: 500;
   letter-spacing: -0.011em;
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   cursor: pointer;
   flex-shrink: 0;
 }
@@ -265,16 +265,16 @@ input {
 
 .chip {
   appearance: none;
-  border: 1px solid #e3e2de;
+  border: 1px solid #e4e3de;
   background: transparent;
-  color: #5c5c56;
+  color: #6a6a64;
   border-radius: 999px;
-  padding: 5px 12px 6px;
-  font-size: 14.5px;
+  padding: 3px 10px 4px;
+  font-size: 14px;
   font-weight: 400;
   letter-spacing: -0.011em;
   cursor: pointer;
-  line-height: 1.2;
+  line-height: 1.3;
 }
 
 .chip:hover:not(:disabled) {
@@ -289,9 +289,9 @@ input {
 .card-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 92px;
-  padding-bottom: 42px;
+  gap: 14px;
+  margin-top: 78px;
+  padding-bottom: 36px;
 }
 
 .research-card,
@@ -299,13 +299,13 @@ input {
 .status-panel {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 22px;
+  border-radius: 18px;
 }
 
 .research-card {
   position: relative;
-  min-height: 292px;
-  padding: 28px 26px 20px;
+  min-height: 248px;
+  padding: 22px 22px 16px;
   display: flex;
   flex-direction: column;
 }
@@ -328,9 +328,9 @@ input {
 .sheet h3,
 .status-panel h2 {
   margin: 0;
-  font-size: 28px;
+  font-size: 22px;
   font-weight: 600;
-  letter-spacing: -0.034em;
+  letter-spacing: -0.032em;
   line-height: 1.15;
   color: var(--ink);
 }
@@ -338,9 +338,9 @@ input {
 .bars {
   display: flex;
   align-items: flex-end;
-  gap: 8px;
-  height: 92px;
-  margin: 28px 0 22px;
+  gap: 7px;
+  height: 68px;
+  margin: 22px 0 16px;
 }
 
 .bar {
@@ -401,19 +401,19 @@ input {
 
 .gpt-pill {
   position: absolute;
-  left: 18px;
-  right: 18px;
+  left: 14px;
+  right: 14px;
   bottom: 0;
-  transform: translateY(46%);
-  height: 54px;
+  transform: translateY(42%);
+  height: 46px;
   background: var(--pill);
   color: #f4f4f2;
   border-radius: 999px;
   display: grid;
   grid-template-columns: 22px 1fr 22px;
   align-items: center;
-  padding: 0 18px;
-  font-size: 15px;
+  padding: 0 16px;
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: -0.015em;
   box-shadow: 0 8px 18px rgba(20, 20, 18, 0.08);
@@ -789,7 +789,8 @@ input {
   }
 
   .stage {
-    width: min(1080px, calc(100% - 40px));
+    width: min(880px, calc(100% - 40px));
+    padding-top: 72px;
   }
 }
 
