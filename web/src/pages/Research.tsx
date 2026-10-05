@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import blobUrl from '../assets/moaty-blob.png'
+import gptMarkUrl from '../assets/gpt-mark.png'
+import gptMicUrl from '../assets/gpt-mic.png'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 const TRY_COMPANIES = ['Apple', 'NVIDIA', 'Costco', 'Microsoft']
@@ -77,28 +79,6 @@ function ArrowIcon() {
     <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4.5 12h13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <path d="M13 6.5L19.2 12 13 17.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function GptMark() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
-      <g fill="none" stroke="currentColor" strokeWidth="1.35">
-        <ellipse cx="12" cy="12" rx="3.05" ry="6.55" />
-        <ellipse cx="12" cy="12" rx="3.05" ry="6.55" transform="rotate(60 12 12)" />
-        <ellipse cx="12" cy="12" rx="3.05" ry="6.55" transform="rotate(120 12 12)" />
-      </g>
-    </svg>
-  )
-}
-
-function MicIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" aria-hidden="true">
-      <rect x="9" y="3.2" width="6" height="10.2" rx="3" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M6.8 11.2a5.2 5.2 0 0 0 10.4 0" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
-      <path d="M12 16.4v3.2M9.2 19.6h5.6" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
     </svg>
   )
 }
@@ -365,9 +345,9 @@ export default function Research() {
             <h2>The signals</h2>
             <MiniBars />
             <div className="gpt-pill">
-              <GptMark />
+              <img src={gptMarkUrl} alt="" className="pill-icon" />
               <span>Work with ChatGPT</span>
-              <MicIcon />
+              <img src={gptMicUrl} alt="" className="pill-icon" />
             </div>
           </article>
 
