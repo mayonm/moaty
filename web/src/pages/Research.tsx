@@ -4,7 +4,7 @@ import blobUrl from '../assets/moaty-blob.png'
 import gptMarkUrl from '../assets/gpt-mark.png'
 import gptMicUrl from '../assets/gpt-mic.png'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = import.meta.env.VITE_API_URL || ''
 const TRY_COMPANIES = ['Apple', 'NVIDIA', 'Costco', 'Microsoft']
 
 interface KalshiMarket {
