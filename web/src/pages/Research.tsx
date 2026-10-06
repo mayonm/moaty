@@ -626,11 +626,11 @@ export default function Research() {
                       <dd>{formatDecimal(result.fundamentals_summary.decay_rate)}</dd>
                     </div>
                     <div>
-                      <dt>Initial ROIC</dt>
+                      <dt>Initial Return</dt>
                       <dd>{formatPercent(result.fundamentals_summary.initial_roic)}</dd>
                     </div>
                     <div>
-                      <dt>Terminal ROIC</dt>
+                      <dt>Terminal Return</dt>
                       <dd>{formatPercent(result.fundamentals_summary.terminal_roic)}</dd>
                     </div>
                     <div>
