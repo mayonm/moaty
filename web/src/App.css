@@ -632,6 +632,88 @@ input {
   font-size: 14px;
 }
 
+.trajectory-sheet {
+  margin-top: 28px;
+}
+
+.trajectory-chart {
+  margin-top: 8px;
+}
+
+.chart-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 18px;
+  list-style: none;
+  margin: 4px 0 0;
+  padding: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.chart-legend li,
+.chart-tip p {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.swatch.sage { background: #8a9a80; }
+.swatch.blue { background: #7f93b0; }
+.swatch.lilac { background: #b3a6c6; }
+
+.chart-tip {
+  background: #fffefb;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 18px rgba(40, 36, 24, 0.06);
+}
+
+.chart-tip p {
+  margin: 0;
+  color: #3f3f3a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.chart-tip-year {
+  color: var(--faint);
+  margin-bottom: 4px !important;
+}
+
+.takeaways {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.takeaways > div {
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 14px;
+  padding: 14px 16px 16px;
+}
+
+.takeaways .kicker {
+  margin-bottom: 8px;
+}
+
+.takeaways p:last-child {
+  margin: 0;
+  color: #2d2d29;
+  font-size: 15.5px;
+  line-height: 1.5;
+  letter-spacing: -0.011em;
+}
+
 .chat-sheet {
   margin-top: 16px;
 }
@@ -791,7 +873,8 @@ input {
 
   .card-row,
   .findings-grid,
-  .metric-list {
+  .metric-list,
+  .takeaways {
     grid-template-columns: 1fr;
   }
 

@@ -13,6 +13,7 @@ import uuid
 
 from .kalshi_client import get_kalshi_client, KalshiMarket
 from .ai_client import get_ai_client, AIClient
+from .trajectory import build_trajectory
 
 
 DB_PATH = Path(__file__).parent.parent / "moaty.db"
@@ -184,6 +185,7 @@ class ResearchService:
             try:
                 fundamentals = self._get_db_fundamentals(search_term)
                 if fundamentals:
+                    fundamentals["trajectory"] = build_trajectory(fundamentals)
                     result.fundamentals = fundamentals
                     result.data_sources_used.append("moaty_database")
                     
@@ -292,6 +294,12 @@ class ResearchService:
                 if session.fundamentals.get('decay_params'):
                     params = session.fundamentals['decay_params']
                     context_parts.append(f"Decay Rate (λ): {params.get('lambda', 'N/A')}")
+                trajectory = session.fundamentals.get("trajectory") or {}
+                takeaways = trajectory.get("takeaways") or {}
+                if takeaways.get("five_year"):
+                    context_parts.append(f"5-year path: {takeaways['five_year']}")
+                if takeaways.get("ten_year"):
+                    context_parts.append(f"10-year path: {takeaways['ten_year']}")
             context = "\n".join(context_parts)
         
         return self.ai.chat(session_id, message, context)

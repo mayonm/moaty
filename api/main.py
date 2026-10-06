@@ -106,6 +106,27 @@ class KalshiMarketResponse(BaseModel):
     url: str
 
 
+class TrajectoryPoint(BaseModel):
+    year: float
+    roic: float
+
+
+class TrajectoryTakeaways(BaseModel):
+    five_year: str
+    ten_year: str
+
+
+class TrajectoryResponse(BaseModel):
+    as_of_year: int
+    historical: List[TrajectoryPoint]
+    forecast: List[TrajectoryPoint]
+    terminal_roic: float
+    current_roic: float
+    year_5: TrajectoryPoint
+    year_10: TrajectoryPoint
+    takeaways: TrajectoryTakeaways
+
+
 class ResearchResponse(BaseModel):
     session_id: str
     company_name: str
@@ -114,6 +135,7 @@ class ResearchResponse(BaseModel):
     kalshi_markets: List[KalshiMarketResponse]
     has_fundamentals: bool
     fundamentals_summary: Optional[dict]
+    trajectory: Optional[TrajectoryResponse] = None
     data_sources: List[str]
     errors: List[str]
 
@@ -275,8 +297,10 @@ async def research_company(request: ResearchRequest):
     
     # Summarize fundamentals for response
     fundamentals_summary = None
+    trajectory = None
     if result.fundamentals:
         decay = result.fundamentals.get("decay_params", {})
+        history = result.fundamentals.get("roic_history") or []
         fundamentals_summary = {
             "ticker": result.fundamentals.get("ticker"),
             "company_name": result.fundamentals.get("company_name"),
@@ -285,8 +309,14 @@ async def research_company(request: ResearchRequest):
             "initial_roic": decay.get("roic_0"),
             "terminal_roic": decay.get("roic_terminal"),
             "r_squared": decay.get("r_squared"),
-            "roic_periods": len(result.fundamentals.get("roic_history", []))
+            "roic_periods": len(history),
+            "roic_history": [
+                {"year": year, "roic": roic}
+                for year, roic in history
+                if year is not None and roic is not None
+            ],
         }
+        trajectory = result.fundamentals.get("trajectory")
     
     return ResearchResponse(
         session_id=result.session_id,
@@ -296,6 +326,7 @@ async def research_company(request: ResearchRequest):
         kalshi_markets=markets,
         has_fundamentals=result.fundamentals is not None,
         fundamentals_summary=fundamentals_summary,
+        trajectory=trajectory,
         data_sources=result.data_sources_used,
         errors=result.errors
     )

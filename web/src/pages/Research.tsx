@@ -1,5 +1,16 @@
 import { useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
+import {
+  CartesianGrid,
+  ComposedChart,
+  Line,
+  ReferenceDot,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import blobUrl from '../assets/moaty-blob.png'
 import gptMarkUrl from '../assets/gpt-mark.png'
 import gptMicUrl from '../assets/gpt-mic.png'
@@ -29,6 +40,25 @@ interface FundamentalsSummary {
   roic_periods: number
 }
 
+interface TrajectoryPoint {
+  year: number
+  roic: number
+}
+
+interface Trajectory {
+  as_of_year: number
+  historical: TrajectoryPoint[]
+  forecast: TrajectoryPoint[]
+  terminal_roic: number
+  current_roic: number
+  year_5: TrajectoryPoint
+  year_10: TrajectoryPoint
+  takeaways: {
+    five_year: string
+    ten_year: string
+  }
+}
+
 interface ResearchResponse {
   session_id: string
   company_name: string
@@ -37,6 +67,7 @@ interface ResearchResponse {
   kalshi_markets: KalshiMarket[]
   has_fundamentals: boolean
   fundamentals_summary: FundamentalsSummary | null
+  trajectory: Trajectory | null
   data_sources: string[]
   errors: string[]
 }
@@ -80,6 +111,164 @@ function ArrowIcon() {
       <path d="M4.5 12h13" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" />
       <path d="M13 6.5L19.2 12 13 17.5" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  )
+}
+
+const SAGE = '#8a9a80'
+const BLUE = '#7f93b0'
+const LILAC = '#b3a6c6'
+const LILAC_INK = '#5c546c'
+
+interface ChartRow {
+  year: number
+  reported: number | null
+  projected: number | null
+}
+
+function toPercent(roic: number) {
+  return roic * 100
+}
+
+function aboutPercent(value: number) {
+  return `${Math.floor(value + 0.5)}%`
+}
+
+function chartRows(trajectory: Trajectory): ChartRow[] {
+  const byYear = new Map<number, ChartRow>()
+  for (const point of trajectory.historical) {
+    byYear.set(point.year, { year: point.year, reported: toPercent(point.roic), projected: null })
+  }
+  for (const point of trajectory.forecast) {
+    const row = byYear.get(point.year) ?? { year: point.year, reported: null, projected: null }
+    row.projected = toPercent(point.roic)
+    byYear.set(point.year, row)
+  }
+  return [...byYear.values()].sort((a, b) => a.year - b.year)
+}
+
+function yearTicks(start: number, end: number) {
+  const span = end - start
+  const step = span > 16 ? 4 : span > 10 ? 2 : 1
+  const ticks: number[] = []
+  for (let year = start; year <= end; year += step) ticks.push(year)
+  if (ticks[ticks.length - 1] !== end) ticks.push(end)
+  return ticks
+}
+
+function TrajectoryTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean
+  payload?: ReadonlyArray<{ dataKey?: unknown; value?: unknown }>
+  label?: string | number
+}) {
+  if (!active || !payload?.length) return null
+  const reported = payload.find((item) => item.dataKey === 'reported' && typeof item.value === 'number')
+  const projected = payload.find((item) => item.dataKey === 'projected' && typeof item.value === 'number')
+  return (
+    <div className="chart-tip">
+      <p className="chart-tip-year">{label}</p>
+      {reported && <p><span className="swatch sage" />Reported {aboutPercent(reported.value as number)}</p>}
+      {projected && <p><span className="swatch blue" />Projected {aboutPercent(projected.value as number)}</p>}
+    </div>
+  )
+}
+
+function TrajectoryChart({ trajectory }: { trajectory: Trajectory }) {
+  const rows = chartRows(trajectory)
+  if (rows.length === 0) return null
+
+  const percents = rows.flatMap((row) => [row.reported, row.projected].filter((value): value is number => value != null))
+  percents.push(toPercent(trajectory.terminal_roic))
+  const lowest = Math.min(...percents)
+  const highest = Math.max(...percents)
+  const domain: [number, number] = [
+    Math.max(0, Math.floor(lowest - 6)),
+    Math.ceil(highest + 8),
+  ]
+  const start = rows[0].year
+  const end = rows[rows.length - 1].year
+
+  return (
+    <div className="trajectory-chart" role="img" aria-label="Return on capital, reported history and a ten-year projection">
+      <ResponsiveContainer width="100%" height={268}>
+        <ComposedChart data={rows} margin={{ top: 26, right: 28, left: 0, bottom: 4 }}>
+          <CartesianGrid stroke="#e6e3d8" vertical={false} />
+          <XAxis
+            dataKey="year"
+            type="number"
+            domain={[start, end]}
+            ticks={yearTicks(start, end)}
+            tick={{ fill: '#77786f', fontSize: 12 }}
+            axisLine={{ stroke: '#e6e3d8' }}
+            tickLine={false}
+            allowDecimals={false}
+          />
+          <YAxis
+            domain={domain}
+            tickFormatter={(value: number) => `${Math.round(value)}%`}
+            tick={{ fill: '#77786f', fontSize: 12 }}
+            axisLine={false}
+            tickLine={false}
+            width={44}
+          />
+          <Tooltip content={<TrajectoryTooltip />} cursor={{ stroke: '#d9d6cc' }} />
+          <ReferenceLine
+            y={toPercent(trajectory.terminal_roic)}
+            stroke="#c9c4b6"
+            strokeDasharray="3 4"
+            label={{ value: 'Long-run', position: 'insideTopLeft', fill: '#8a8a84', fontSize: 11 }}
+          />
+          <Line
+            type="linear"
+            dataKey="projected"
+            name="Projected"
+            stroke={BLUE}
+            strokeWidth={2.4}
+            dot={false}
+            activeDot={{ r: 4, fill: BLUE, stroke: '#f7f6f1' }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          <Line
+            type="linear"
+            dataKey="reported"
+            name="Reported"
+            stroke={SAGE}
+            strokeWidth={1.6}
+            dot={{ r: 3.6, fill: SAGE, stroke: '#f3f2ec', strokeWidth: 1 }}
+            activeDot={{ r: 5, fill: SAGE, stroke: '#f7f6f1' }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+          <ReferenceDot
+            x={trajectory.year_5.year}
+            y={toPercent(trajectory.year_5.roic)}
+            r={5}
+            fill={LILAC}
+            stroke={LILAC_INK}
+            strokeWidth={1.25}
+            label={{ value: 'Year 5', position: 'top', fill: LILAC_INK, fontSize: 12, offset: 8 }}
+          />
+          <ReferenceDot
+            x={trajectory.year_10.year}
+            y={toPercent(trajectory.year_10.roic)}
+            r={5}
+            fill={LILAC}
+            stroke={LILAC_INK}
+            strokeWidth={1.25}
+            label={{ value: 'Year 10', position: 'top', fill: LILAC_INK, fontSize: 12, offset: 8 }}
+          />
+        </ComposedChart>
+      </ResponsiveContainer>
+      <ul className="chart-legend">
+        <li><span className="swatch sage" />Reported</li>
+        <li><span className="swatch blue" />Projected</li>
+        <li><span className="swatch lilac" />Year 5 and year 10</li>
+      </ul>
+    </div>
   )
 }
 
@@ -187,6 +376,7 @@ export default function Research() {
         kalshi_markets: [],
         has_fundamentals: false,
         fundamentals_summary: null,
+        trajectory: null,
         data_sources: [],
         errors: [message],
       })
@@ -389,6 +579,27 @@ export default function Research() {
               ))}
             </div>
           </header>
+
+          {result.trajectory && result.trajectory.historical.length > 0 && (
+            <article className="sheet trajectory-sheet">
+              <p className="kicker">THE PATH</p>
+              <h3>Where returns are headed</h3>
+              <p className="sheet-note">
+                Reported return on capital, then the fitted path from {result.trajectory.as_of_year} out ten years.
+              </p>
+              <TrajectoryChart trajectory={result.trajectory} />
+              <div className="takeaways">
+                <div>
+                  <p className="kicker">5 YEARS</p>
+                  <p>{result.trajectory.takeaways.five_year}</p>
+                </div>
+                <div>
+                  <p className="kicker">10 YEARS</p>
+                  <p>{result.trajectory.takeaways.ten_year}</p>
+                </div>
+              </div>
+            </article>
+          )}
 
           <div className="findings-grid">
             <article className="sheet">

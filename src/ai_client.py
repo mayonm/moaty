@@ -15,6 +15,8 @@ from pathlib import Path
 from typing import Optional, Dict, Any, List
 from dataclasses import dataclass
 
+from .trajectory import percent_label
+
 # Groq configuration (OpenAI-compatible)
 GROQ_BASE_URL = "https://api.groq.com/openai/v1"
 GROQ_MODEL = "llama-3.3-70b-versatile"  # Best free model on Groq
@@ -268,6 +270,22 @@ class AIClient:
                     prompt_parts.append(f"- Terminal ROIC: {params['roic_terminal']*100:.1f}%\n")
                 if params.get('r_squared') is not None:
                     prompt_parts.append(f"- Fit Quality (R²): {params['r_squared']:.3f}\n")
+
+            trajectory = fundamentals.get("trajectory") or {}
+            year_5 = trajectory.get("year_5") or {}
+            year_10 = trajectory.get("year_10") or {}
+            if year_5.get("roic") is not None and year_10.get("roic") is not None:
+                prompt_parts.append("\n**Projected return on capital (use these figures):**\n")
+                prompt_parts.append(
+                    f"- In 5 years ({year_5.get('year')}): {percent_label(year_5['roic'])}\n"
+                )
+                prompt_parts.append(
+                    f"- In 10 years ({year_10.get('year')}): {percent_label(year_10['roic'])}\n"
+                )
+                if trajectory.get("terminal_roic") is not None:
+                    prompt_parts.append(
+                        f"- Long-run ROIC: {percent_label(trajectory['terminal_roic'])}\n"
+                    )
             
             if fundamentals.get("sector"):
                 prompt_parts.append(f"\n**Sector:** {fundamentals['sector']}\n")
