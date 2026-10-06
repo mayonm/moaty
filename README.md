@@ -4,10 +4,10 @@ Moaty is an interactive research tool that combines AI analysis with prediction 
 
 ## Features
 
-- **AI Moat Analysis** — Get comprehensive competitive advantage analysis powered by Groq or Gemini
+- **AI Moat Analysis** — Competitive advantage analysis from a local AI engine (no API key)
 - **Prediction Markets** — See what Kalshi traders expect for company and economic events
 - **Interactive Chat** — Ask follow-up questions to dive deeper into any analysis
-- **Historical Data** — Access ROIC decay metrics from our database of 2,000+ companies
+- **Historical Data** — ROIC decay metrics for the companies in the database. If you have not run the full pipeline, the app creates a 26-company demo set so search still works.
 
 ## Quick Start
 
@@ -15,9 +15,9 @@ Moaty is an interactive research tool that combines AI analysis with prediction 
 
 - Python 3.10+
 - Node.js 18+
-- **Free AI API Key** (choose one):
-  - **Groq** (recommended) — [Get free key](https://console.groq.com/keys) — No credit card required
-  - **Gemini** — [Get free key](https://aistudio.google.com/app/apikey)
+- About 2 GB of free RAM for the local model
+
+No API key is required. The search feature runs **Qwen2.5-1.5B-Instruct** locally through llama.cpp. The model file downloads automatically the first time the API starts (about 1 GB).
 
 ### Installation
 
@@ -31,17 +31,21 @@ cd web && npm install && cd ..
 
 ### Run the Application
 
-Terminal 1 (API server):
+Terminal 1 (API server), from the project root:
 ```bash
-cd api && uvicorn main:app --reload --port 8000
+python -m uvicorn api.main:app --port 8000
 ```
+
+The first start downloads the local model if it is not already in `models/`. Leave this terminal open.
 
 Terminal 2 (Frontend):
 ```bash
 cd web && npm run dev
 ```
 
-Open http://localhost:5173 in your browser.
+Open http://localhost:3000 in your browser.
+
+A company search usually finishes in about 20–30 seconds on a laptop CPU. The page shows a status line while the local engine is writing the analysis.
 
 ## How It Works
 
@@ -103,8 +107,8 @@ curl -X POST http://localhost:8000/api/research \
 ## Data Sources
 
 1. **Kalshi** — Real-time prediction market data (no auth required)
-2. **Google Gemini** — AI analysis (free API key required)
-3. **Moaty Database** — Historical ROIC and decay parameters (optional)
+2. **Local AI engine** — Qwen2.5-1.5B-Instruct running on this machine
+3. **Moaty Database** — Historical ROIC and decay parameters (a small demo set is created automatically if you have not run the full pipeline)
 
 ## Historical Data Pipeline (Optional)
 
@@ -132,10 +136,12 @@ See [METHODOLOGY.md](METHODOLOGY.md) for detailed documentation.
 
 | Variable | Description |
 |----------|-------------|
-| `GROQ_API_KEY` | Groq API key (free, recommended) |
-| `GEMINI_API_KEY` | Google Gemini API key (alternative) |
+| `MOATY_MODEL_PATH` | Optional path to a different GGUF model |
+| `MOATY_DISABLE_LOCAL` | Set to `1` to skip the local engine and use a cloud key instead |
+| `GROQ_API_KEY` | Optional Groq fallback, only used when local AI is disabled |
+| `GEMINI_API_KEY` | Optional Gemini fallback, only used when local AI is disabled |
 
-**Note:** Set one of these environment variables to enable AI-powered search. If neither is set, users can enter their API key in the UI.
+**Note:** Leave these unset for the presentation demo. The local engine starts on its own.
 
 ## License
 

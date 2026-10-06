@@ -26,6 +26,8 @@ Manifest.toml
 
 # Moaty build artifacts
 moaty.db
+models/*.gguf
+models/*.bin
 data/
 *.log
 node_modules/

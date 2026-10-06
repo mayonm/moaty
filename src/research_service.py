@@ -13,6 +13,7 @@ import uuid
 
 from .kalshi_client import get_kalshi_client, KalshiMarket
 from .ai_client import get_ai_client, AIClient
+from .trajectory import build_trajectory
 
 
 DB_PATH = Path(__file__).parent.parent / "moaty.db"
@@ -68,6 +69,10 @@ class ResearchService:
     def get_provider(self) -> Optional[str]:
         """Get the current AI provider name."""
         return self.ai.get_provider()
+
+    def get_model_name(self) -> Optional[str]:
+        """Get the model currently serving analysis."""
+        return self.ai.get_model_name()
     
     def _get_db_fundamentals(self, identifier: str) -> Optional[Dict]:
         """
@@ -180,6 +185,7 @@ class ResearchService:
             try:
                 fundamentals = self._get_db_fundamentals(search_term)
                 if fundamentals:
+                    fundamentals["trajectory"] = build_trajectory(fundamentals)
                     result.fundamentals = fundamentals
                     result.data_sources_used.append("moaty_database")
                     
@@ -194,16 +200,18 @@ class ResearchService:
         kalshi_markets = []
         if include_kalshi:
             try:
-                # Search for company-specific markets
-                company_markets = self.kalshi.search_markets(search_term, limit=5)
+                # Company name matches event titles better than a bare ticker.
+                company_markets = self.kalshi.search_markets(company_name, limit=4)
                 kalshi_markets.extend(company_markets)
-                
-                # Also search by ticker if different
-                if ticker and ticker.lower() != company_name.lower():
-                    ticker_markets = self.kalshi.get_stock_markets(ticker)
+
+                ticker_query = result.ticker or ticker
+                if ticker_query and ticker_query.lower() != company_name.lower():
+                    ticker_markets = self.kalshi.search_markets(ticker_query, limit=3)
+                    seen = {m.ticker for m in kalshi_markets}
                     for m in ticker_markets:
-                        if m not in kalshi_markets:
+                        if m.ticker not in seen:
                             kalshi_markets.append(m)
+                            seen.add(m.ticker)
                 
                 if kalshi_markets:
                     result.data_sources_used.append("kalshi_markets")
@@ -214,18 +222,26 @@ class ResearchService:
         # 3. Add economic context markets
         if include_economic_context:
             try:
-                econ_markets = self.kalshi.get_economic_markets(limit=5)
+                econ_markets = self.kalshi.get_economic_markets(limit=3)
                 kalshi_markets.extend(econ_markets)
             except Exception as e:
                 result.errors.append(f"Economic markets lookup failed: {str(e)}")
         
-        result.kalshi_markets = kalshi_markets
+        unique_markets = []
+        seen_titles = set()
+        for market in kalshi_markets:
+            key = market.title.strip().lower()
+            if key in seen_titles:
+                continue
+            seen_titles.add(key)
+            unique_markets.append(market)
+        result.kalshi_markets = unique_markets
         
         # 4. Generate AI analysis
         if self.ai.is_configured():
             try:
                 # Format Kalshi data for prompt
-                kalshi_text = self.kalshi.format_markets_for_prompt(kalshi_markets)
+                kalshi_text = self.kalshi.format_markets_for_prompt(kalshi_markets[:6])
                 
                 # Generate analysis
                 analysis = self.ai.analyze_company_sync(
@@ -243,7 +259,7 @@ class ResearchService:
                 result.errors.append(f"AI analysis failed: {str(e)}")
                 result.analysis = f"Error generating analysis: {str(e)}"
         else:
-            result.analysis = "No AI API key configured. Set GROQ_API_KEY (free) or GEMINI_API_KEY to enable AI analysis."
+            result.analysis = "Local AI engine is not ready. Restart the API to finish the model download."
         
         # Store session for follow-up
         self.sessions[session_id] = result
@@ -278,6 +294,12 @@ class ResearchService:
                 if session.fundamentals.get('decay_params'):
                     params = session.fundamentals['decay_params']
                     context_parts.append(f"Decay Rate (λ): {params.get('lambda', 'N/A')}")
+                trajectory = session.fundamentals.get("trajectory") or {}
+                takeaways = trajectory.get("takeaways") or {}
+                if takeaways.get("five_year"):
+                    context_parts.append(f"5-year path: {takeaways['five_year']}")
+                if takeaways.get("ten_year"):
+                    context_parts.append(f"10-year path: {takeaways['ten_year']}")
             context = "\n".join(context_parts)
         
         return self.ai.chat(session_id, message, context)

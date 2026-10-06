@@ -6,6 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 3000,
+    // Public tunnels (trycloudflare.com, etc.) send a non-localhost Host header.
+    allowedHosts: true,
     proxy: {
       '/api': {
         target: 'http://localhost:8000',
